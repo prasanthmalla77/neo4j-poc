@@ -227,7 +227,82 @@
   margin-bottom: 6px;
 }
 
-/* Setup Container */
+/* Connection Banner (New) */
+.neodash-connection-banner {
+  background: linear-gradient(135deg, #0B6FCC 0%, #0A5BA8 100%);
+  color: white;
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.neodash-connection-banner strong {
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.neodash-connection-banner .connection-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.neodash-connection-banner .connection-details code {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Courier New', monospace;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Iframe Wrapper (New) */
+.neodash-iframe-wrapper {
+  flex: 1;
+  position: relative;
+  min-height: 700px;
+  background: #1a1a1a;
+  border: 2px solid #E0E0E0;
+}
+
+.neodash-iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 700px;
+  border: none;
+  display: block;
+}
+
+.neodash-iframe-wrapper .loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 400px;
+  color: #999;
+}
+
+.neodash-iframe-wrapper .spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #E0E0E0;
+  border-top-color: #0B6FCC;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.neodash-iframe-wrapper .loading-state p {
+  font-size: 14px;
+  color: #666;
+}
+
+/* Setup Container (Old - keeping for compatibility) */
 .neodash-setup-container {
   padding: 32px 24px;
   background: white;
@@ -526,6 +601,14 @@
     min-height: 400px;
   }
 
+  .neodash-iframe-wrapper {
+    min-height: 500px;
+  }
+
+  .neodash-iframe {
+    min-height: 500px;
+  }
+
   .feature-grid {
     grid-template-columns: 1fr;
   }
@@ -533,5 +616,9 @@
   .neodash-info-banner {
     grid-template-columns: 1fr;
     gap: 12px;
+  }
+
+  .neodash-connection-banner .connection-details {
+    flex-direction: column;
   }
 }

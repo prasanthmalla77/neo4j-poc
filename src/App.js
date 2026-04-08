@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './App.css';
 import GraphVisualization from './components/GraphVisualization';
-import NeoDashPanel from './components/NeoDashPanel';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
 import { NEO4J_CONFIG } from './services/neo4jService';
 
 function App() {
@@ -31,7 +31,7 @@ function App() {
             onClick={() => setActiveTab('dashboard')}
           >
             <span className="tab-icon">📈</span>
-            NeoDash Analytics
+            Analytics Dashboard
           </button>
         </div>
 
@@ -45,7 +45,7 @@ function App() {
 
           {activeTab === 'dashboard' && (
             <div className="tab-pane active">
-              <NeoDashPanel neo4jConfig={NEO4J_CONFIG} />
+              <AnalyticsDashboard neo4jConfig={NEO4J_CONFIG} jobId="neo4j_job_001" />
             </div>
           )}
         </div>

@@ -5,6 +5,18 @@ import './AlgorithmResults.css';
 const AlgorithmResults = ({ results, onHighlight, onClearHighlight, onExport }) => {
   const [expandedItems, setExpandedItems] = useState(new Set());
 
+  // Helper function to safely convert Neo4j values to displayable strings
+  const toDisplayValue = (value) => {
+    if (value === null || value === undefined) return 'N/A';
+    if (typeof value === 'object' && value.low !== undefined && value.high !== undefined) {
+      // Neo4j Integer object
+      return value.toNumber ? value.toNumber().toString() : String(value.low);
+    }
+    if (Array.isArray(value)) return value.map(v => toDisplayValue(v)).join(', ');
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value);
+  };
+
   if (!results || !results.results || results.results.length === 0) {
     return null;
   }
@@ -114,7 +126,7 @@ const AlgorithmResults = ({ results, onHighlight, onClearHighlight, onExport }) 
                         <div key={key} className="property-item">
                           <span className="property-key">{key}:</span>
                           <span className="property-value">
-                            {Array.isArray(value) ? value.join(', ') : String(value)}
+                            {toDisplayValue(value)}
                           </span>
                         </div>
                       ))}
@@ -125,7 +137,7 @@ const AlgorithmResults = ({ results, onHighlight, onClearHighlight, onExport }) 
                         <div key={key} className="property-item">
                           <span className="property-key">{key}:</span>
                           <span className="property-value">
-                            {Array.isArray(value) ? value.join(', ') : String(value)}
+                            {toDisplayValue(value)}
                           </span>
                         </div>
                       ))}
@@ -213,11 +225,11 @@ const AlgorithmResults = ({ results, onHighlight, onClearHighlight, onExport }) 
                     <h4>Path Nodes</h4>
                     <div className="path-nodes-list">
                       {result.nodes.map((node, idx) => (
-                        <div key={node.id} className="path-node-item">
+                        <div key={toDisplayValue(node.id)} className="path-node-item">
                           <span className="node-index">{idx + 1}</span>
                           <span className="node-label">{node.labels[0]}</span>
                           <span className="node-name">
-                            {node.properties?.name || node.id}
+                            {toDisplayValue(node.properties?.name) || toDisplayValue(node.id)}
                           </span>
                         </div>
                       ))}
@@ -225,14 +237,14 @@ const AlgorithmResults = ({ results, onHighlight, onClearHighlight, onExport }) 
                     <h4>Path Relationships</h4>
                     <div className="path-relationships-list">
                       {result.relationships.map((rel, idx) => (
-                        <div key={rel.id} className="path-rel-item">
+                        <div key={toDisplayValue(rel.id)} className="path-rel-item">
                           <span className="rel-index">{idx + 1}</span>
                           <span className="rel-type">{rel.type}</span>
                           {rel.properties && Object.keys(rel.properties).length > 0 && (
                             <div className="rel-properties">
                               {Object.entries(rel.properties).map(([key, value]) => (
                                 <span key={key} className="rel-prop">
-                                  {key}: {value}
+                                  {key}: {toDisplayValue(value)}
                                 </span>
                               ))}
                             </div>

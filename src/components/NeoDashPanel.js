@@ -1,13 +1,11 @@
-import React from 'react';
+import { useState, useEffect } from 'react';
 import './NeoDashPanel.css';
 
 const NeoDashPanel = ({ neo4jConfig, jobId }) => {
-  const openNeoDash = () => {
-    window.open('https://neodash.graphapp.io/', '_blank');
-  };
+  const [iframeUrl, setIframeUrl] = useState('');
 
-  const downloadDashboardConfig = () => {
-    // Create a dashboard configuration that can be imported into NeoDash
+  useEffect(() => {
+    // Create the pre-configured dashboard
     const dashboard = {
       title: "Neo4j GDS Analysis Dashboard",
       version: "2.4",
@@ -15,7 +13,14 @@ const NeoDashPanel = ({ neo4jConfig, jobId }) => {
         pagenumber: 0,
         editable: true,
         fullscreenEnabled: false,
-        parameters: {}
+        parameters: {},
+        connectionDetails: {
+          protocol: neo4jConfig.uri.split('://')[0],
+          url: neo4jConfig.uri.split('://')[1],
+          database: neo4jConfig.database,
+          username: neo4jConfig.username,
+          password: neo4jConfig.password
+        }
       },
       pages: [
         {
@@ -154,18 +159,16 @@ const NeoDashPanel = ({ neo4jConfig, jobId }) => {
       }
     };
 
-    // Create downloadable JSON file
-    const dataStr = JSON.stringify(dashboard, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'neodash-gds-dashboard.json';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
+    // Encode the dashboard as base64
+    const encodedDashboard = btoa(JSON.stringify(dashboard));
+
+    // Create NeoDash URL with embedded dashboard
+    // IMPORTANT: Using HTTP (not HTTPS) to allow bolt:// connection to local Neo4j
+    const baseUrl = 'http://neodash.graphapp.io';
+    const url = `${baseUrl}/?dashboard=${encodedDashboard}`;
+
+    setIframeUrl(url);
+  }, [neo4jConfig]);
 
   return (
     <div className="neodash-panel">
@@ -173,15 +176,18 @@ const NeoDashPanel = ({ neo4jConfig, jobId }) => {
         <div className="neodash-title-section">
           <h3 className="neodash-title">NeoDash Analytics Dashboard</h3>
           <span className="neodash-subtitle">
-            Pre-configured dashboard with GDS-ready visualizations
+            Integrated NeoDash with pre-configured visualizations
           </span>
         </div>
         <div className="neodash-controls">
-          <span className="status-badge">
-            ✅ Dashboard Loaded
+          <span className="status-badge connected">
+            ✅ NeoDash Loaded
           </span>
-          <button className="neodash-help-btn" onClick={() => window.open('https://neo4j.com/labs/neodash/', '_blank')}>
-            📖 NeoDash Help
+          <button
+            className="neodash-help-btn"
+            onClick={() => window.open('http://neodash.graphapp.io/', '_blank')}
+          >
+            📖 Open in New Tab
           </button>
         </div>
       </div>
@@ -196,105 +202,36 @@ const NeoDashPanel = ({ neo4jConfig, jobId }) => {
           <span>Graphs, Charts, Tables & Metrics</span>
         </div>
         <div className="info-item">
-          <strong>🚀 Quick Setup</strong>
-          <span>3 simple steps to launch your dashboard</span>
+          <strong>🔌 Connection Required</strong>
+          <span>Click "Connect" in NeoDash and use credentials below</span>
         </div>
       </div>
 
-      <div className="neodash-setup-container">
-        <div className="setup-step">
-          <div className="step-number">1</div>
-          <div className="step-content">
-            <h4>Launch NeoDash</h4>
-            <p>Click the button below to open NeoDash in a new window</p>
-            <button className="neodash-launch-btn" onClick={openNeoDash}>
-              🚀 Open NeoDash Dashboard
-            </button>
-          </div>
-        </div>
-
-        <div className="setup-step">
-          <div className="step-number">2</div>
-          <div className="step-content">
-            <h4>Connect to Neo4j</h4>
-            <p>Use these credentials to connect (copy-paste ready):</p>
-            <div className="credentials-box">
-              <div className="credential-row">
-                <span className="cred-label">Protocol + URL:</span>
-                <code className="cred-value">{neo4jConfig.uri}</code>
-              </div>
-              <div className="credential-row">
-                <span className="cred-label">Database:</span>
-                <code className="cred-value">{neo4jConfig.database}</code>
-              </div>
-              <div className="credential-row">
-                <span className="cred-label">Username:</span>
-                <code className="cred-value">{neo4jConfig.username}</code>
-              </div>
-              <div className="credential-row">
-                <span className="cred-label">Password:</span>
-                <code className="cred-value">{neo4jConfig.password}</code>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="setup-step">
-          <div className="step-number">3</div>
-          <div className="step-content">
-            <h4>Import Pre-configured Dashboard</h4>
-            <p>Download and import our ready-to-use dashboard configuration</p>
-            <button className="neodash-download-btn" onClick={downloadDashboardConfig}>
-              📥 Download Dashboard Config
-            </button>
-            <p className="import-instructions">
-              In NeoDash: Click "Load Dashboard" → "Import from file" → Select the downloaded JSON
-            </p>
-          </div>
+      <div className="neodash-connection-banner">
+        <strong>🔐 Neo4j Connection Details:</strong>
+        <div className="connection-details">
+          <code>URL: {neo4jConfig.uri}</code>
+          <code>Database: {neo4jConfig.database}</code>
+          <code>Username: {neo4jConfig.username}</code>
+          <code>Password: {neo4jConfig.password}</code>
         </div>
       </div>
 
-      <div className="neodash-footer">
-        <div className="dashboard-features">
-          <strong>📋 What's Included:</strong>
-          <div className="feature-grid">
-            <div className="feature-item">
-              <span className="feature-icon">📊</span>
-              <div className="feature-content">
-                <strong>Network Overview</strong>
-                <p>Node counts, relationship counts, type distributions, and full network graph</p>
-              </div>
-            </div>
-            <div className="feature-item">
-              <span className="feature-icon">👥</span>
-              <div className="feature-content">
-                <strong>People & Connections</strong>
-                <p>Social network visualization, visit patterns, and occupation breakdown</p>
-              </div>
-            </div>
-            <div className="feature-item">
-              <span className="feature-icon">🗺️</span>
-              <div className="feature-content">
-                <strong>City Analytics</strong>
-                <p>Population charts, road network tables, and geographic connections</p>
-              </div>
-            </div>
-            <div className="feature-item">
-              <span className="feature-icon">✏️</span>
-              <div className="feature-content">
-                <strong>Fully Editable</strong>
-                <p>Customize queries, add new cards, and create additional pages</p>
-              </div>
-            </div>
+      <div className="neodash-iframe-wrapper">
+        {iframeUrl ? (
+          <iframe
+            src={iframeUrl}
+            title="NeoDash Dashboard"
+            className="neodash-iframe"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"
+            allow="clipboard-read; clipboard-write"
+          />
+        ) : (
+          <div className="loading-state">
+            <div className="spinner"></div>
+            <p>Loading NeoDash...</p>
           </div>
-        </div>
-
-        <div className="connection-info-compact">
-          <strong>🔐 Connection Details (if needed):</strong>
-          <code>
-            {neo4jConfig.uri} | Database: {neo4jConfig.database} | User: {neo4jConfig.username}
-          </code>
-        </div>
+        )}
       </div>
     </div>
   );
