@@ -1,0 +1,274 @@
+/* Algorithm Panel Styles */
+
+.algorithm-panel {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.algo-panel-header {
+  background: linear-gradient(135deg, #0B6FCC 0%, #0A5BA8 100%);
+  padding: 16px 20px;
+  color: white;
+}
+
+.algo-panel-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.algo-panel-content {
+  padding: 20px;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+/* Form Groups */
+.algo-form-group {
+  margin-bottom: 20px;
+}
+
+.algo-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.algo-label .required {
+  color: #D32F2F;
+  margin-left: 4px;
+}
+
+.algo-select,
+.algo-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #E0E0E0;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #333;
+  background: white;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.algo-select:focus,
+.algo-input:focus {
+  outline: none;
+  border-color: #0B6FCC;
+  box-shadow: 0 0 0 3px rgba(11, 111, 204, 0.1);
+}
+
+.algo-select:disabled,
+.algo-input:disabled {
+  background: #F5F5F5;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.algo-help-text {
+  display: block;
+  font-size: 12px;
+  color: #666;
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+/* Algorithm Description */
+.algo-description {
+  background: #F0F7FF;
+  border-left: 4px solid #0B6FCC;
+  padding: 12px 16px;
+  margin: 16px 0;
+  border-radius: 4px;
+}
+
+.algo-description p {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #333;
+  line-height: 1.5;
+}
+
+.algo-category {
+  display: inline-block;
+  background: #0B6FCC;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Configuration Form */
+.algo-config-form {
+  margin-top: 20px;
+}
+
+.algo-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #E0E0E0;
+}
+
+/* Multiselect */
+.algo-multiselect {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #F9F9F9;
+  border-radius: 6px;
+  border: 2px solid #E0E0E0;
+}
+
+.algo-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  transition: color 0.2s ease;
+}
+
+.algo-checkbox-label:hover {
+  color: #0B6FCC;
+}
+
+.algo-checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #0B6FCC;
+}
+
+.algo-checkbox-label input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
+/* Validation Errors */
+.algo-errors {
+  background: #FFEBEE;
+  border-left: 4px solid #D32F2F;
+  padding: 12px 16px;
+  margin: 16px 0;
+  border-radius: 4px;
+}
+
+.algo-errors strong {
+  display: block;
+  color: #D32F2F;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.algo-errors ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.algo-errors li {
+  color: #C62828;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+/* Execute Button */
+.algo-execute-button {
+  width: 100%;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #0B6FCC 0%, #0A5BA8 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.algo-execute-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0A5BA8 0%, #094A8A 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(11, 111, 204, 0.3);
+}
+
+.algo-execute-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.algo-execute-button:disabled {
+  background: #BDBDBD;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.algo-execute-button.executing {
+  background: #757575;
+  cursor: wait;
+}
+
+/* Spinner Animation */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Scrollbar Styling */
+.algo-panel-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.algo-panel-content::-webkit-scrollbar-track {
+  background: #F5F5F5;
+}
+
+.algo-panel-content::-webkit-scrollbar-thumb {
+  background: #BDBDBD;
+  border-radius: 4px;
+}
+
+.algo-panel-content::-webkit-scrollbar-thumb:hover {
+  background: #9E9E9E;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .algo-panel-content {
+    max-height: 400px;
+  }
+
+  .algo-panel-title {
+    font-size: 16px;
+  }
+
+  .algo-execute-button {
+    font-size: 14px;
+    padding: 12px 20px;
+  }
+}

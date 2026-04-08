@@ -1,5 +1,81 @@
 .App {
   text-align: center;
+  min-height: 100vh;
+  background: #F5F5F5;
+}
+
+/* Tab Navigation Styles */
+.tab-navigation {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.tab-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 32px;
+  background: white;
+  border: 2px solid #E0E0E0;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.tab-button:hover {
+  border-color: #0B6FCC;
+  color: #0B6FCC;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(11, 111, 204, 0.2);
+}
+
+.tab-button.active {
+  background: linear-gradient(135deg, #0B6FCC 0%, #0A5BA8 100%);
+  border-color: #0B6FCC;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(11, 111, 204, 0.3);
+}
+
+.tab-icon {
+  font-size: 20px;
+}
+
+.tab-content {
+  min-height: 600px;
+}
+
+.tab-pane {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive Tab Navigation */
+@media (max-width: 768px) {
+  .tab-navigation {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .tab-button {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 .App-logo {
