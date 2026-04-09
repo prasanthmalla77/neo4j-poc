@@ -61,12 +61,18 @@ export const convertToNvlRelationship = (relationship) => {
  */
 export const getNodeColorByLabel = (label) => {
   const colorMap = {
-    'Person': '#4CAF50',
-    'Company': '#2196F3',
-    'Project': '#FF9800',
-    'Skill': '#9C27B0',
-    'City': '#00BCD4',
-    'Country': '#795548'
+    'Material': '#4CAF50',
+    'Site': '#0B6FCC',
+    'Market': '#FF9800',
+    'Warehouse': '#9C27B0',
+    'MaterialLocation': '#00BCD4',
+    'InventoryActuals': '#F44336',
+    'Forecast': '#FFC107',
+    'ActualSales': '#E91E63',
+    'ProductionActuals': '#673AB7',
+    'BOM': '#795548',
+    'Organisation': '#607D8B',
+    'PerformanceMetric': '#009688'
   };
   return colorMap[label] || '#757575';
 };

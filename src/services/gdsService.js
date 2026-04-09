@@ -112,6 +112,7 @@ export const runNodeSimilarity = async (projectionName, config) => {
   });
 
   // Calculate similarity pairs (mock)
+  // IMPORTANT: Only compare nodes of the same type/label
   const similarityPairs = [];
   const nodeIds = Array.from(nodeNeighbors.keys());
 
@@ -119,6 +120,15 @@ export const runNodeSimilarity = async (projectionName, config) => {
     for (let j = i + 1; j < nodeIds.length; j++) {
       const node1Id = nodeIds[i];
       const node2Id = nodeIds[j];
+
+      const node1 = nodes.find(n => n.id === node1Id);
+      const node2 = nodes.find(n => n.id === node2Id);
+
+      // Skip if nodes don't have the same primary label
+      if (!node1 || !node2 || node1.labels[0] !== node2.labels[0]) {
+        continue;
+      }
+
       const neighbors1 = nodeNeighbors.get(node1Id);
       const neighbors2 = nodeNeighbors.get(node2Id);
 
@@ -149,8 +159,8 @@ export const runNodeSimilarity = async (projectionName, config) => {
           node1: node1Id,
           node2: node2Id,
           score: similarity,
-          node1Data: nodes.find(n => n.id === node1Id),
-          node2Data: nodes.find(n => n.id === node2Id)
+          node1Data: node1,
+          node2Data: node2
         });
       }
     }

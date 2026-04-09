@@ -139,7 +139,9 @@ const ChatQuery = () => {
 
   // Hardcoded sample questions
   const sampleQuestions = [
-    "Give me all details of all cities and persons"
+    "Show me all materials and their sites",
+    "Show supply chain network",
+    "Show materials with inventory"
   ];
 
   const handleSampleClick = (question) => {

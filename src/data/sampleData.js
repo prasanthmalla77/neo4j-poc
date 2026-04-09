@@ -1,5 +1,5 @@
-// Sample Neo4j graph data - simulating nodes and relationships
-// This represents a simple social network with people and their relationships
+// Sample Neo4j graph data - simulating supply chain network
+// This represents a simple supply chain with materials, sites, and markets
 
 export const sampleGraphData = {
   nodes: [
@@ -7,112 +7,94 @@ export const sampleGraphData = {
       id: '1',
       size: 25,
       color: '#4CAF50',
-      caption: 'Alice Johnson',
-      labels: ['Person']
+      caption: 'Material 1',
+      labels: ['Material']
     },
     {
       id: '2',
       size: 25,
       color: '#4CAF50',
-      caption: 'Bob Smith',
-      labels: ['Person']
+      caption: 'Material 2',
+      labels: ['Material']
     },
     {
       id: '3',
       size: 25,
       color: '#4CAF50',
-      caption: 'Carol Williams',
-      labels: ['Person']
+      caption: 'Material 3',
+      labels: ['Material']
     },
     {
       id: '4',
-      size: 25,
-      color: '#4CAF50',
-      caption: 'David Brown',
-      labels: ['Person']
+      size: 30,
+      color: '#0B6FCC',
+      caption: 'Site 1',
+      labels: ['Site']
     },
     {
       id: '5',
-      size: 25,
-      color: '#4CAF50',
-      caption: 'Eve Davis',
-      labels: ['Person']
+      size: 30,
+      color: '#0B6FCC',
+      caption: 'Site 2',
+      labels: ['Site']
     },
     {
       id: '6',
-      size: 40,
-      color: '#2196F3',
-      caption: 'TechCorp',
-      labels: ['Company']
+      size: 30,
+      color: '#FF9800',
+      caption: 'Market 1',
+      labels: ['Market']
     },
     {
       id: '7',
       size: 35,
-      color: '#FF9800',
-      caption: 'GraphDB Project',
-      labels: ['Project']
+      color: '#9C27B0',
+      caption: 'Warehouse 1',
+      labels: ['Warehouse']
     }
   ],
   relationships: [
     {
       id: 'r1',
       from: '1',
-      to: '2',
-      caption: 'KNOWS'
+      to: '4',
+      caption: 'LOCATED_AT'
     },
     {
       id: 'r2',
-      from: '1',
-      to: '3',
-      caption: 'KNOWS'
+      from: '2',
+      to: '4',
+      caption: 'LOCATED_AT'
     },
     {
       id: 'r3',
-      from: '2',
-      to: '4',
-      caption: 'KNOWS'
+      from: '3',
+      to: '5',
+      caption: 'LOCATED_AT'
     },
     {
       id: 'r4',
-      from: '3',
-      to: '5',
-      caption: 'KNOWS'
+      from: '1',
+      to: '6',
+      caption: 'SOLD_IN'
     },
     {
       id: 'r5',
-      from: '1',
+      from: '2',
       to: '6',
-      caption: 'WORKS_AT'
+      caption: 'SOLD_IN'
     },
     {
       id: 'r6',
-      from: '2',
-      to: '6',
-      caption: 'WORKS_AT'
+      from: '4',
+      to: '7',
+      caption: 'SHIPS_TO'
     },
     {
       id: 'r7',
       from: '5',
-      to: '6',
-      caption: 'WORKS_AT'
-    },
-    {
-      id: 'r8',
-      from: '1',
       to: '7',
-      caption: 'WORKS_ON'
-    },
-    {
-      id: 'r9',
-      from: '2',
-      to: '7',
-      caption: 'WORKS_ON'
-    },
-    {
-      id: 'r10',
-      from: '4',
-      to: '7',
-      caption: 'MANAGES'
+      caption: 'SHIPS_TO'
     }
   ]
 };

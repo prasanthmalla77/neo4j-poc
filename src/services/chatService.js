@@ -2,13 +2,31 @@ import { fetchGraphData } from './neo4jService';
 
 // Hardcoded query mapping for POC
 const HARDCODED_QUERIES = {
-  'give me all details of all cities and persons': {
+  'show me all materials and their sites': {
     query: `MATCH (n)
-WHERE n:City OR n:Person
+WHERE n:Material OR n:Site
 OPTIONAL MATCH (n)-[r]-(connected)
-WHERE connected:City OR connected:Person
-RETURN n, r, connected`,
-    description: 'Fetching all cities and persons with their relationships'
+WHERE connected:Material OR connected:Site OR connected:MaterialLocation
+RETURN n, r, connected
+LIMIT 100`,
+    description: 'Fetching all materials and sites with their relationships'
+  },
+  'show supply chain network': {
+    query: `MATCH (n)
+WHERE n:Material OR n:Site OR n:Market OR n:Warehouse
+OPTIONAL MATCH (n)-[r]-(connected)
+RETURN n, r, connected
+LIMIT 150`,
+    description: 'Fetching complete supply chain network'
+  },
+  'show materials with inventory': {
+    query: `MATCH (n)
+WHERE n:Material OR n:InventoryActuals OR n:Site
+OPTIONAL MATCH (n)-[r]-(connected)
+WHERE connected:Material OR connected:InventoryActuals OR connected:Site
+RETURN n, r, connected
+LIMIT 100`,
+    description: 'Fetching materials with inventory at sites'
   }
 };
 
@@ -28,7 +46,7 @@ export const processChatQuery = async (userQuestion) => {
 
   // Default query if no match found
   if (!queryInfo) {
-    queryInfo = HARDCODED_QUERIES['give me all details of all cities and persons'];
+    queryInfo = HARDCODED_QUERIES['show me all materials and their sites'];
   }
 
   // Execute the query and get graph data
@@ -156,11 +174,18 @@ const convertNeo4jProperties = (properties) => {
 // Get node color based on label
 const getNodeColor = (label) => {
   const colorMap = {
-    'City': '#0B6FCC',
-    'Person': '#4CAF50',
-    'Company': '#FF9800',
-    'Project': '#E91E63',
-    'Skill': '#9C27B0'
+    'Material': '#4CAF50',
+    'Site': '#0B6FCC',
+    'Market': '#FF9800',
+    'Warehouse': '#9C27B0',
+    'MaterialLocation': '#00BCD4',
+    'InventoryActuals': '#F44336',
+    'Forecast': '#FFC107',
+    'ActualSales': '#E91E63',
+    'ProductionActuals': '#673AB7',
+    'BOM': '#795548',
+    'Organisation': '#607D8B',
+    'PerformanceMetric': '#009688'
   };
   return colorMap[label] || '#999999';
 };

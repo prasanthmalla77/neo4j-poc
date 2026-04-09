@@ -1,358 +1,299 @@
 // Mock data simulating backend API response
-// This represents what your colleague's backend engine will send
+// This represents what your backend engine will send
+// Supply Chain Data Model
 
 export const mockJobResponse = {
   jobId: 'job_12345',
-  createdAt: '2026-04-07T10:30:00Z',
+  createdAt: '2026-04-09T10:30:00Z',
   status: 'ready',
   nodes: [
+    // Materials
     {
-      id: 'person_1',
-      labels: ['Person'],
+      id: 'material_1',
+      labels: ['Material'],
       properties: {
-        name: 'Alice Johnson',
-        age: 28,
-        department: 'Engineering',
-        skills: ['Python', 'Neo4j', 'React']
+        MATERIAL_IDENTIFIER: 'MAT1',
+        CLEANED_LOCAL_MATERIAL_CODE: 'LCM1',
+        name: 'Material 1'
       }
     },
     {
-      id: 'person_2',
-      labels: ['Person'],
+      id: 'material_2',
+      labels: ['Material'],
       properties: {
-        name: 'Bob Smith',
-        age: 32,
-        department: 'Engineering',
-        skills: ['Java', 'Neo4j', 'Spring']
+        MATERIAL_IDENTIFIER: 'MAT2',
+        CLEANED_LOCAL_MATERIAL_CODE: 'LCM2',
+        name: 'Material 2'
       }
     },
     {
-      id: 'person_3',
-      labels: ['Person'],
+      id: 'material_3',
+      labels: ['Material'],
       properties: {
-        name: 'Carol Williams',
-        age: 29,
-        department: 'Data Science',
-        skills: ['Python', 'Machine Learning', 'Neo4j']
+        MATERIAL_IDENTIFIER: 'MAT3',
+        CLEANED_LOCAL_MATERIAL_CODE: 'LCM3',
+        name: 'Material 3'
+      }
+    },
+    // Sites
+    {
+      id: 'site_1',
+      labels: ['Site'],
+      properties: {
+        PLANT_CODE: 'PLANT1',
+        name: 'Site 1'
       }
     },
     {
-      id: 'person_4',
-      labels: ['Person'],
+      id: 'site_2',
+      labels: ['Site'],
       properties: {
-        name: 'David Brown',
-        age: 35,
-        department: 'Management',
-        skills: ['Leadership', 'Strategy', 'Agile']
+        PLANT_CODE: 'PLANT2',
+        name: 'Site 2'
       }
     },
     {
-      id: 'person_5',
-      labels: ['Person'],
+      id: 'site_3',
+      labels: ['Site'],
       properties: {
-        name: 'Eve Davis',
-        age: 27,
-        department: 'Engineering',
-        skills: ['JavaScript', 'React', 'Node.js']
+        PLANT_CODE: 'PLANT3',
+        name: 'Site 3'
+      }
+    },
+    // Markets
+    {
+      id: 'market_1',
+      labels: ['Market'],
+      properties: {
+        MARKET_CODE: 'MKT1',
+        name: 'Market 1'
       }
     },
     {
-      id: 'person_6',
-      labels: ['Person'],
+      id: 'market_2',
+      labels: ['Market'],
       properties: {
-        name: 'Frank Miller',
-        age: 30,
-        department: 'Data Science',
-        skills: ['Python', 'TensorFlow', 'Statistics']
+        MARKET_CODE: 'MKT2',
+        name: 'Market 2'
+      }
+    },
+    // Warehouses
+    {
+      id: 'warehouse_1',
+      labels: ['Warehouse'],
+      properties: {
+        id: 'WH1',
+        name: 'Warehouse 1'
       }
     },
     {
-      id: 'company_1',
-      labels: ['Company'],
+      id: 'warehouse_2',
+      labels: ['Warehouse'],
       properties: {
-        name: 'TechCorp Inc',
-        founded: 2010,
-        industry: 'Technology',
-        size: 'Large'
+        id: 'WH2',
+        name: 'Warehouse 2'
+      }
+    },
+    // Material Locations
+    {
+      id: 'material_location_1',
+      labels: ['MaterialLocation'],
+      properties: {
+        MATERIAL_IDENTIFIER: 'MAT1',
+        PLANT_CODE: 'PLANT1',
+        PRODUCT_LOCATION_TYPE_CODE: 'TYPE1'
+      }
+    },
+    // Inventory Actuals
+    {
+      id: 'inventory_1',
+      labels: ['InventoryActuals'],
+      properties: {
+        MATERIAL_CODE: 'LCM1',
+        PLANT_CODE: 'PLANT1',
+        quantity: 150
       }
     },
     {
-      id: 'project_1',
-      labels: ['Project'],
+      id: 'inventory_2',
+      labels: ['InventoryActuals'],
       properties: {
-        name: 'GraphDB Migration',
-        status: 'active',
-        budget: 500000,
-        priority: 'high'
+        MATERIAL_CODE: 'LCM2',
+        PLANT_CODE: 'PLANT2',
+        quantity: 200
       }
     },
+    // Forecasts
     {
-      id: 'project_2',
-      labels: ['Project'],
+      id: 'forecast_1',
+      labels: ['Forecast'],
       properties: {
-        name: 'ML Pipeline',
-        status: 'active',
-        budget: 300000,
-        priority: 'medium'
+        CLEANED_LOCAL_MATERIAL_CODE: 'LCM1',
+        MARKET_CODE: 'MKT1',
+        forecast_qty: 250
       }
     },
+    // Actual Sales
     {
-      id: 'skill_1',
-      labels: ['Skill'],
+      id: 'sales_1',
+      labels: ['ActualSales'],
       properties: {
-        name: 'Neo4j',
-        category: 'Database',
-        level: 'Advanced'
+        DEMAND_YEAR_MONTH_NUMBER: 202401,
+        CLEANED_LOCAL_MATERIAL_CODE: 'LCM1',
+        MARKET_CODE: 'MKT1',
+        sales_qty: 180
       }
     },
+    // Production Actuals
     {
-      id: 'skill_2',
-      labels: ['Skill'],
+      id: 'production_1',
+      labels: ['ProductionActuals'],
       properties: {
-        name: 'Python',
-        category: 'Programming',
-        level: 'Advanced'
+        LOCALPACKKEY: 'PK1',
+        PLANTCODE: 'PLANT1',
+        YEARNUMBER: 2024,
+        quantity: 170
+      }
+    },
+    // BOM
+    {
+      id: 'bom_1',
+      labels: ['BOM'],
+      properties: {
+        BILL_OF_MATERIALS_IDENTIFIER: 'BOM1'
+      }
+    },
+    // Organisation (Supplier)
+    {
+      id: 'supplier_1',
+      labels: ['Organisation'],
+      properties: {
+        VENDOR_CODE: 'VEND1',
+        name: 'Vendor 1'
+      }
+    },
+    // Performance Metric
+    {
+      id: 'metric_1',
+      labels: ['PerformanceMetric'],
+      properties: {
+        id: 'PM1',
+        score: 85
       }
     }
   ],
   relationships: [
+    // Material - Material Location
     {
       id: 'rel_1',
-      type: 'KNOWS',
-      startNode: 'person_1',
-      endNode: 'person_2',
-      properties: {
-        since: 2018,
-        strength: 0.9
-      }
+      type: 'HAS_MATERIAL_LOCATION',
+      startNode: 'material_1',
+      endNode: 'material_location_1',
+      properties: {}
     },
+    // Material Location - Site
     {
       id: 'rel_2',
-      type: 'KNOWS',
-      startNode: 'person_1',
-      endNode: 'person_3',
-      properties: {
-        since: 2019,
-        strength: 0.75
-      }
+      type: 'LOCATED_AT',
+      startNode: 'material_location_1',
+      endNode: 'site_1',
+      properties: {}
     },
+    // Site - Inventory
     {
       id: 'rel_3',
-      type: 'KNOWS',
-      startNode: 'person_2',
-      endNode: 'person_4',
-      properties: {
-        since: 2017,
-        strength: 0.8
-      }
+      type: 'HAS_INVENTORY_ACTUALS',
+      startNode: 'site_1',
+      endNode: 'inventory_1',
+      properties: {}
     },
+    // Inventory - Material
     {
       id: 'rel_4',
-      type: 'KNOWS',
-      startNode: 'person_3',
-      endNode: 'person_5',
-      properties: {
-        since: 2020,
-        strength: 0.85
-      }
+      type: 'HAS_MATERIAL',
+      startNode: 'inventory_1',
+      endNode: 'material_1',
+      properties: {}
     },
+    // Material - Forecast
     {
       id: 'rel_5',
-      type: 'KNOWS',
-      startNode: 'person_3',
-      endNode: 'person_6',
-      properties: {
-        since: 2019,
-        strength: 0.95
-      }
+      type: 'HAS_FORECAST',
+      startNode: 'material_1',
+      endNode: 'forecast_1',
+      properties: {}
     },
+    // Forecast - Market
     {
       id: 'rel_6',
-      type: 'KNOWS',
-      startNode: 'person_5',
-      endNode: 'person_6',
-      properties: {
-        since: 2021,
-        strength: 0.7
-      }
+      type: 'marketOfSale',
+      startNode: 'forecast_1',
+      endNode: 'market_1',
+      properties: {}
     },
+    // Material - Actual Sales
     {
       id: 'rel_7',
-      type: 'WORKS_AT',
-      startNode: 'person_1',
-      endNode: 'company_1',
-      properties: {
-        since: 2019,
-        role: 'Senior Engineer'
-      }
+      type: 'HAS_ACTUAL_SALES',
+      startNode: 'material_1',
+      endNode: 'sales_1',
+      properties: {}
     },
+    // Actual Sales - Market
     {
       id: 'rel_8',
-      type: 'WORKS_AT',
-      startNode: 'person_2',
-      endNode: 'company_1',
-      properties: {
-        since: 2017,
-        role: 'Lead Engineer'
-      }
+      type: 'marketOfSale',
+      startNode: 'sales_1',
+      endNode: 'market_1',
+      properties: {}
     },
+    // Site - Production
     {
       id: 'rel_9',
-      type: 'WORKS_AT',
-      startNode: 'person_3',
-      endNode: 'company_1',
-      properties: {
-        since: 2019,
-        role: 'Data Scientist'
-      }
+      type: 'HAS_PRODUCTION_ACTUALS',
+      startNode: 'site_1',
+      endNode: 'production_1',
+      properties: {}
     },
+    // Production - Material
     {
       id: 'rel_10',
-      type: 'WORKS_AT',
-      startNode: 'person_4',
-      endNode: 'company_1',
-      properties: {
-        since: 2015,
-        role: 'Project Manager'
-      }
+      type: 'produces',
+      startNode: 'production_1',
+      endNode: 'material_1',
+      properties: {}
     },
+    // Material - BOM
     {
       id: 'rel_11',
-      type: 'WORKS_AT',
-      startNode: 'person_5',
-      endNode: 'company_1',
-      properties: {
-        since: 2020,
-        role: 'Frontend Developer'
-      }
+      type: 'HAS_BOM',
+      startNode: 'material_1',
+      endNode: 'bom_1',
+      properties: {}
     },
+    // BOM - Material (component)
     {
       id: 'rel_12',
-      type: 'WORKS_AT',
-      startNode: 'person_6',
-      endNode: 'company_1',
-      properties: {
-        since: 2019,
-        role: 'ML Engineer'
-      }
+      type: 'HAS_BOM_ITEM',
+      startNode: 'bom_1',
+      endNode: 'material_2',
+      properties: {}
     },
+    // Supplier - Material
     {
       id: 'rel_13',
-      type: 'WORKS_ON',
-      startNode: 'person_1',
-      endNode: 'project_1',
-      properties: {
-        role: 'Developer',
-        hoursPerWeek: 40
-      }
+      type: 'supplies',
+      startNode: 'supplier_1',
+      endNode: 'material_1',
+      properties: {}
     },
+    // Material - Performance Metric
     {
       id: 'rel_14',
-      type: 'WORKS_ON',
-      startNode: 'person_2',
-      endNode: 'project_1',
-      properties: {
-        role: 'Tech Lead',
-        hoursPerWeek: 35
-      }
-    },
-    {
-      id: 'rel_15',
-      type: 'WORKS_ON',
-      startNode: 'person_3',
-      endNode: 'project_2',
-      properties: {
-        role: 'Data Scientist',
-        hoursPerWeek: 40
-      }
-    },
-    {
-      id: 'rel_16',
-      type: 'WORKS_ON',
-      startNode: 'person_6',
-      endNode: 'project_2',
-      properties: {
-        role: 'ML Engineer',
-        hoursPerWeek: 40
-      }
-    },
-    {
-      id: 'rel_17',
-      type: 'MANAGES',
-      startNode: 'person_4',
-      endNode: 'project_1',
-      properties: {
-        since: 2023
-      }
-    },
-    {
-      id: 'rel_18',
-      type: 'MANAGES',
-      startNode: 'person_4',
-      endNode: 'project_2',
-      properties: {
-        since: 2024
-      }
-    },
-    {
-      id: 'rel_19',
-      type: 'HAS_SKILL',
-      startNode: 'person_1',
-      endNode: 'skill_1',
-      properties: {
-        proficiency: 0.9,
-        yearsOfExperience: 4
-      }
-    },
-    {
-      id: 'rel_20',
-      type: 'HAS_SKILL',
-      startNode: 'person_1',
-      endNode: 'skill_2',
-      properties: {
-        proficiency: 0.85,
-        yearsOfExperience: 6
-      }
-    },
-    {
-      id: 'rel_21',
-      type: 'HAS_SKILL',
-      startNode: 'person_2',
-      endNode: 'skill_1',
-      properties: {
-        proficiency: 0.95,
-        yearsOfExperience: 5
-      }
-    },
-    {
-      id: 'rel_22',
-      type: 'HAS_SKILL',
-      startNode: 'person_3',
-      endNode: 'skill_1',
-      properties: {
-        proficiency: 0.8,
-        yearsOfExperience: 3
-      }
-    },
-    {
-      id: 'rel_23',
-      type: 'HAS_SKILL',
-      startNode: 'person_3',
-      endNode: 'skill_2',
-      properties: {
-        proficiency: 0.9,
-        yearsOfExperience: 5
-      }
-    },
-    {
-      id: 'rel_24',
-      type: 'HAS_SKILL',
-      startNode: 'person_6',
-      endNode: 'skill_2',
-      properties: {
-        proficiency: 0.88,
-        yearsOfExperience: 4
-      }
+      type: 'isEvaluatedBy',
+      startNode: 'material_1',
+      endNode: 'metric_1',
+      properties: {}
     }
   ],
   availableAlgorithms: [
@@ -376,123 +317,28 @@ export const mockJobResponse = {
 // Additional mock job for testing
 export const mockJobResponse2 = {
   jobId: 'job_67890',
-  createdAt: '2026-04-06T15:20:00Z',
+  createdAt: '2026-04-09T11:00:00Z',
   status: 'ready',
   nodes: [
     {
-      id: 'city_1',
-      labels: ['City'],
+      id: 'material_10',
+      labels: ['Material'],
       properties: {
-        name: 'New York',
-        population: 8336817,
-        country: 'USA'
+        MATERIAL_IDENTIFIER: 'MAT10',
+        CLEANED_LOCAL_MATERIAL_CODE: 'LCM10',
+        name: 'Material 10'
       }
     },
     {
-      id: 'city_2',
-      labels: ['City'],
+      id: 'site_10',
+      labels: ['Site'],
       properties: {
-        name: 'London',
-        population: 8982000,
-        country: 'UK'
-      }
-    },
-    {
-      id: 'city_3',
-      labels: ['City'],
-      properties: {
-        name: 'Paris',
-        population: 2161000,
-        country: 'France'
-      }
-    },
-    {
-      id: 'city_4',
-      labels: ['City'],
-      properties: {
-        name: 'Berlin',
-        population: 3645000,
-        country: 'Germany'
-      }
-    },
-    {
-      id: 'city_5',
-      labels: ['City'],
-      properties: {
-        name: 'Tokyo',
-        population: 13960000,
-        country: 'Japan'
+        PLANT_CODE: 'PLANT10',
+        name: 'Site 10'
       }
     }
   ],
-  relationships: [
-    {
-      id: 'route_1',
-      type: 'FLIGHT_TO',
-      startNode: 'city_1',
-      endNode: 'city_2',
-      properties: {
-        distance: 5585,
-        duration: 7.5,
-        cost: 450
-      }
-    },
-    {
-      id: 'route_2',
-      type: 'FLIGHT_TO',
-      startNode: 'city_2',
-      endNode: 'city_3',
-      properties: {
-        distance: 344,
-        duration: 1.25,
-        cost: 120
-      }
-    },
-    {
-      id: 'route_3',
-      type: 'FLIGHT_TO',
-      startNode: 'city_3',
-      endNode: 'city_4',
-      properties: {
-        distance: 878,
-        duration: 1.75,
-        cost: 150
-      }
-    },
-    {
-      id: 'route_4',
-      type: 'FLIGHT_TO',
-      startNode: 'city_1',
-      endNode: 'city_3',
-      properties: {
-        distance: 5837,
-        duration: 8,
-        cost: 500
-      }
-    },
-    {
-      id: 'route_5',
-      type: 'FLIGHT_TO',
-      startNode: 'city_2',
-      endNode: 'city_5',
-      properties: {
-        distance: 9584,
-        duration: 12,
-        cost: 800
-      }
-    },
-    {
-      id: 'route_6',
-      type: 'FLIGHT_TO',
-      startNode: 'city_4',
-      endNode: 'city_5',
-      properties: {
-        distance: 8918,
-        duration: 11.5,
-        cost: 750
-      }
-    }
-  ],
+  relationships: [],
   availableAlgorithms: [
     {
       id: 'nodeSimilarity',
@@ -510,28 +356,3 @@ export const mockJobResponse2 = {
     }
   ]
 };
-
-// Helper function to get job by ID
-export const getJobById = (jobId) => {
-  if (jobId === 'job_12345') return mockJobResponse;
-  if (jobId === 'job_67890') return mockJobResponse2;
-  return null;
-};
-
-// Helper function to get all available jobs
-export const getAllJobs = () => [
-  {
-    jobId: mockJobResponse.jobId,
-    createdAt: mockJobResponse.createdAt,
-    status: mockJobResponse.status,
-    nodeCount: mockJobResponse.nodes.length,
-    relationshipCount: mockJobResponse.relationships.length
-  },
-  {
-    jobId: mockJobResponse2.jobId,
-    createdAt: mockJobResponse2.createdAt,
-    status: mockJobResponse2.status,
-    nodeCount: mockJobResponse2.nodes.length,
-    relationshipCount: mockJobResponse2.relationships.length
-  }
-];
