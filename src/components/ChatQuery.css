@@ -359,6 +359,44 @@
   }
 }
 
+/* NLP Answer Block */
+.nlp-answer-block {
+  margin-top: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, #F0F7FF 0%, #E8F4FF 100%);
+  border-left: 4px solid #0B6FCC;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.8;
+  box-shadow: 0 2px 4px rgba(11, 111, 204, 0.08);
+}
+
+.nlp-line {
+  margin: 8px 0;
+  color: #333;
+}
+
+.nlp-line:empty {
+  margin: 4px 0;
+}
+
+.nlp-answer-block strong {
+  color: #0B6FCC;
+  font-weight: 700;
+}
+
+/* Analyzing Step Style */
+.agent-message.step-analyzing {
+  background: #FFF8E1;
+  border-left: 4px solid #FFA726;
+}
+
+/* NLP Answer Step Style */
+.agent-message.step-nlp-answer {
+  background: #E3F2FD;
+  border-left: 4px solid #0B6FCC;
+}
+
 /* Enhanced Summary Block */
 .summary-block {
   margin-top: 12px;

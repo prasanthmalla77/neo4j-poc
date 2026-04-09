@@ -30,6 +30,79 @@ LIMIT 100`,
   }
 };
 
+// Generate NLP answer based on graph data
+const generateNLPAnswer = (userQuestion, graphData) => {
+  const nodeCount = graphData.nodes.length;
+  const relCount = graphData.relationships.length;
+
+  // Analyze node types
+  const nodeTypes = graphData.nodes.reduce((acc, node) => {
+    const label = node.labels[0];
+    acc[label] = (acc[label] || 0) + 1;
+    return acc;
+  }, {});
+
+  // Analyze relationships
+  const relTypes = graphData.relationships.reduce((acc, rel) => {
+    acc[rel.type] = (acc[rel.type] || 0) + 1;
+    return acc;
+  }, {});
+
+  // Build natural language answer
+  let answer = "";
+
+  // Opening statement based on question type
+  const normalizedQ = userQuestion.toLowerCase();
+  if (normalizedQ.includes('material') && normalizedQ.includes('site')) {
+    answer = `I found **${nodeCount} entities** in your supply chain network. `;
+  } else if (normalizedQ.includes('supply chain')) {
+    answer = `Your supply chain network contains **${nodeCount} nodes** connected by **${relCount} relationships**. `;
+  } else if (normalizedQ.includes('inventory')) {
+    answer = `Based on the inventory analysis, I discovered **${nodeCount} entities** across your system. `;
+  } else {
+    answer = `I've analyzed your graph database and found **${nodeCount} nodes** with **${relCount} relationships**. `;
+  }
+
+  // Detailed breakdown
+  const nodeBreakdown = Object.entries(nodeTypes)
+    .map(([label, count]) => `**${count}** ${label}${count > 1 ? 's' : ''}`)
+    .join(', ');
+
+  answer += `This includes ${nodeBreakdown}. `;
+
+  // Relationship insights
+  if (relCount > 0) {
+    const topRelType = Object.entries(relTypes).sort((a, b) => b[1] - a[1])[0];
+    answer += `\n\nThe network has **${relCount}** connections, with the most common relationship being "${topRelType[0]}" (${topRelType[1]} instances). `;
+  }
+
+  // Specific insights based on node types
+  if (nodeTypes['Material']) {
+    answer += `\n\n🏭 **Material Insights:** Found ${nodeTypes['Material']} material${nodeTypes['Material'] > 1 ? 's' : ''} in the network. `;
+  }
+
+  if (nodeTypes['Site']) {
+    answer += `These materials are distributed across ${nodeTypes['Site']} production site${nodeTypes['Site'] > 1 ? 's' : ''}. `;
+  }
+
+  if (nodeTypes['InventoryActuals']) {
+    answer += `\n\n📦 **Inventory Status:** ${nodeTypes['InventoryActuals']} inventory record${nodeTypes['InventoryActuals'] > 1 ? 's are' : ' is'} available showing current stock levels. `;
+  }
+
+  if (nodeTypes['Market']) {
+    answer += `\n\n🌍 **Market Coverage:** The supply chain serves ${nodeTypes['Market']} market${nodeTypes['Market'] > 1 ? 's' : ''}. `;
+  }
+
+  if (nodeTypes['Warehouse']) {
+    answer += `Materials are stored in ${nodeTypes['Warehouse']} warehouse${nodeTypes['Warehouse'] > 1 ? 's' : ''}. `;
+  }
+
+  // Closing statement
+  answer += `\n\nYou can explore the interactive graph visualization to see how these entities are connected and analyze the relationships in detail.`;
+
+  return answer;
+};
+
 // Process chat query (hardcoded for POC)
 export const processChatQuery = async (userQuestion) => {
   // Normalize the question
@@ -53,10 +126,14 @@ export const processChatQuery = async (userQuestion) => {
   try {
     const graphData = await executeCustomQuery(queryInfo.query);
 
+    // Generate NLP answer
+    const nlpAnswer = generateNLPAnswer(userQuestion, graphData);
+
     return {
       query: queryInfo.query,
       description: queryInfo.description,
-      graphData: graphData
+      graphData: graphData,
+      nlpAnswer: nlpAnswer
     };
   } catch (error) {
     throw new Error(`Failed to execute query: ${error.message}`);

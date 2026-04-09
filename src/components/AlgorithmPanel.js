@@ -66,6 +66,9 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
             <label className="algo-label">
               {param.label}
               {param.required && <span className="required">*</span>}
+              {param.helpText && (
+                <span className="info-icon" title={param.helpText}>ℹ️</span>
+              )}
             </label>
             <select
               className="algo-select"
@@ -75,12 +78,17 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
             >
               <option value="">Select {param.label}</option>
               {param.options.map(opt => (
-                <option key={opt.value} value={opt.value}>
+                <option key={opt.value} value={opt.value} title={opt.description || ''}>
                   {opt.label}
                 </option>
               ))}
             </select>
             {param.helpText && <small className="algo-help-text">{param.helpText}</small>}
+            {value && param.options.find(opt => opt.value === value)?.description && (
+              <div className="option-description">
+                💡 {param.options.find(opt => opt.value === value).description}
+              </div>
+            )}
           </div>
         );
 
@@ -90,6 +98,9 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
             <label className="algo-label">
               {param.label}
               {param.required && <span className="required">*</span>}
+              {param.helpText && (
+                <span className="info-icon" title={param.helpText}>ℹ️</span>
+              )}
             </label>
             <input
               type="number"
@@ -100,8 +111,14 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
               step={param.step || 1}
               onChange={(e) => handleConfigChange(paramKey, parseFloat(e.target.value))}
               disabled={isExecuting}
+              placeholder={param.placeholder || `Enter ${param.label.toLowerCase()}`}
             />
             {param.helpText && <small className="algo-help-text">{param.helpText}</small>}
+            {(param.min !== undefined || param.max !== undefined) && (
+              <small className="algo-range-text">
+                Range: {param.min ?? 'no min'} - {param.max ?? 'no max'}
+              </small>
+            )}
           </div>
         );
 
@@ -111,6 +128,9 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
             <label className="algo-label">
               {param.label}
               {param.required && <span className="required">*</span>}
+              {param.helpText && (
+                <span className="info-icon" title={param.helpText}>ℹ️</span>
+              )}
             </label>
             <input
               type="text"
@@ -130,26 +150,33 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
             <label className="algo-label">
               {param.label}
               {param.required && <span className="required">*</span>}
+              {param.helpText && (
+                <span className="info-icon" title={param.helpText}>ℹ️</span>
+              )}
             </label>
-            <div className="algo-multiselect">
-              {param.options.map(opt => (
-                <label key={opt.value} className="algo-checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={(value || []).includes(opt.value)}
-                    onChange={(e) => {
-                      const newValue = e.target.checked
-                        ? [...(value || []), opt.value]
-                        : (value || []).filter(v => v !== opt.value);
-                      handleConfigChange(paramKey, newValue);
-                    }}
-                    disabled={isExecuting}
-                  />
-                  <span>{opt.label}</span>
-                </label>
-              ))}
-            </div>
             {param.helpText && <small className="algo-help-text">{param.helpText}</small>}
+            <div className="algo-multiselect">
+              {param.options.length === 0 ? (
+                <small className="algo-empty-text">No options available</small>
+              ) : (
+                param.options.map(opt => (
+                  <label key={opt.value} className="algo-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={(value || []).includes(opt.value)}
+                      onChange={(e) => {
+                        const newValue = e.target.checked
+                          ? [...(value || []), opt.value]
+                          : (value || []).filter(v => v !== opt.value);
+                        handleConfigChange(paramKey, newValue);
+                      }}
+                      disabled={isExecuting}
+                    />
+                    <span>{opt.label}</span>
+                  </label>
+                ))
+              )}
+            </div>
           </div>
         );
 
@@ -159,6 +186,9 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
             <label className="algo-label">
               {param.label}
               {param.required && <span className="required">*</span>}
+              {param.helpText && (
+                <span className="info-icon" title={param.helpText}>ℹ️</span>
+              )}
             </label>
             <select
               className="algo-select"
@@ -194,6 +224,7 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
           <label className="algo-label">
             Select Algorithm
             <span className="required">*</span>
+            <span className="info-icon" title="Choose a graph algorithm to analyze your network">ℹ️</span>
           </label>
           <select
             className="algo-select"
@@ -203,11 +234,12 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
           >
             <option value="">Choose an algorithm...</option>
             {availableAlgorithms.map(algo => (
-              <option key={algo.id} value={algo.id}>
+              <option key={algo.id} value={algo.id} title={algo.description || ''}>
                 {algo.name}
               </option>
             ))}
           </select>
+          <small className="algo-help-text">Select a graph algorithm to run on your data</small>
         </div>
 
         {/* Algorithm Description */}

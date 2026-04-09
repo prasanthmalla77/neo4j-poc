@@ -43,6 +43,18 @@
   margin-left: 4px;
 }
 
+.algo-label .info-icon {
+  margin-left: 6px;
+  cursor: help;
+  font-size: 14px;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.algo-label .info-icon:hover {
+  opacity: 1;
+}
+
 .algo-select,
 .algo-input {
   width: 100%;
@@ -76,6 +88,46 @@
   color: #666;
   margin-top: 6px;
   line-height: 1.4;
+}
+
+.algo-range-text {
+  display: block;
+  font-size: 11px;
+  color: #999;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.algo-empty-text {
+  color: #999;
+  font-style: italic;
+  padding: 8px;
+  display: block;
+  text-align: center;
+}
+
+/* Option Description (for select dropdowns) */
+.option-description {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #F0F7FF 0%, #E8F4FF 100%);
+  border-left: 3px solid #0B6FCC;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #333;
+  line-height: 1.5;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Algorithm Description */

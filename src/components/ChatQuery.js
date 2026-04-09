@@ -131,6 +131,32 @@ const ChatQuery = () => {
 
       await new Promise(resolve => setTimeout(resolve, 1500));
 
+      // Add NLP analysis message
+      const nlpAnalysisMessage = {
+        id: Date.now() + 4.5,
+        type: 'agent',
+        step: 'analyzing',
+        text: '🤖 Analyzing results with NLP...',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, nlpAnalysisMessage]);
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Add NLP answer
+      const nlpAnswerMessage = {
+        id: Date.now() + 4.7,
+        type: 'agent',
+        step: 'nlp-answer',
+        text: '💡 AI Analysis:',
+        nlpAnswer: result.nlpAnswer,
+        timestamp: new Date(),
+        animated: true
+      };
+      setMessages(prev => [...prev, nlpAnswerMessage]);
+
+      await new Promise(resolve => setTimeout(resolve, 800));
+
       // Prepare job data for GraphVisualization
       const job = {
         jobId: 'chat_query_001',
@@ -270,6 +296,21 @@ const ChatQuery = () => {
                   {msg.query && (
                     <div className="query-block">
                       <code>{msg.query}</code>
+                    </div>
+                  )}
+                  {msg.nlpAnswer && (
+                    <div className="nlp-answer-block">
+                      {msg.nlpAnswer.split('\n').map((line, i) => (
+                        <div key={i} className="nlp-line">
+                          {line.includes('**') ? (
+                            <span dangerouslySetInnerHTML={{
+                              __html: line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                            }} />
+                          ) : (
+                            line
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                   {msg.summary && (
