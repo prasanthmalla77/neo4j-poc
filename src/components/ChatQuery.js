@@ -1,7 +1,47 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import GraphVisualization from './GraphVisualization';
 import { processChatQuery } from '../services/chatService';
 import './ChatQuery.css';
+
+// Typing Animation Component
+const TypingIndicator = () => (
+  <div className="typing-indicator">
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+);
+
+// Animated Text Component
+const AnimatedText = ({ text, speed = 30 }) => {
+  const [displayedText, setDisplayedText] = useState('');
+  const [isComplete, setIsComplete] = useState(false);
+
+  useEffect(() => {
+    setDisplayedText('');
+    setIsComplete(false);
+    let index = 0;
+
+    const timer = setInterval(() => {
+      if (index < text.length) {
+        setDisplayedText(text.substring(0, index + 1));
+        index++;
+      } else {
+        setIsComplete(true);
+        clearInterval(timer);
+      }
+    }, speed);
+
+    return () => clearInterval(timer);
+  }, [text, speed]);
+
+  return (
+    <span>
+      {displayedText}
+      {!isComplete && <span className="cursor-blink">|</span>}
+    </span>
+  );
+};
 
 const ChatQuery = () => {
   const [messages, setMessages] = useState([]);
@@ -9,6 +49,13 @@ const ChatQuery = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [jobData, setJobData] = useState(null);
   const [graphData, setGraphData] = useState(null);
+  const [showTyping, setShowTyping] = useState(false);
+  const messagesEndRef = useRef(null);
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, showTyping]);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim() || isProcessing) return;
@@ -23,6 +70,11 @@ const ChatQuery = () => {
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
     setIsProcessing(true);
+    setShowTyping(true);
+
+    // Simulate typing delay
+    await new Promise(resolve => setTimeout(resolve, 800));
+    setShowTyping(false);
 
     // Add thinking message
     const thinkingMessage = {
@@ -30,12 +82,13 @@ const ChatQuery = () => {
       type: 'agent',
       step: 'thinking',
       text: '🤔 Understanding your question...',
-      timestamp: new Date()
+      timestamp: new Date(),
+      animated: true
     };
     setMessages(prev => [...prev, thinkingMessage]);
 
     // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 1200));
 
     // Add query generation message
     const queryGenMessage = {
@@ -104,14 +157,30 @@ const ChatQuery = () => {
       setJobData(job);
       setGraphData(result.graphData);
 
-      // Add success message
+      // Generate detailed summary based on graph data
+      const nodeTypes = result.graphData.nodes.reduce((acc, node) => {
+        const label = node.labels[0];
+        acc[label] = (acc[label] || 0) + 1;
+        return acc;
+      }, {});
+
+      const summaryParts = Object.entries(nodeTypes)
+        .map(([label, count]) => `${count} ${label}${count > 1 ? 's' : ''}`)
+        .join(', ');
+
+      // Add success message with rich summary
       const successMessage = {
         id: Date.now() + 5,
         type: 'agent',
         step: 'success',
         text: `✅ Query executed successfully!`,
-        summary: `Found ${result.graphData.nodes.length} nodes and ${result.graphData.relationships.length} relationships.`,
-        timestamp: new Date()
+        summary: `📊 **Results Summary:**\n\n` +
+                 `• Total Nodes: ${result.graphData.nodes.length}\n` +
+                 `• Total Relationships: ${result.graphData.relationships.length}\n` +
+                 `• Breakdown: ${summaryParts}\n\n` +
+                 `The graph visualization on the right shows the complete network structure with interactive nodes and relationships.`,
+        timestamp: new Date(),
+        animated: true
       };
       setMessages(prev => [...prev, successMessage]);
 
@@ -137,11 +206,20 @@ const ChatQuery = () => {
     }
   };
 
-  // Hardcoded sample questions
+  // Sample questions
   const sampleQuestions = [
-    "Show me all materials and their sites",
-    "Show supply chain network",
-    "Show materials with inventory"
+    {
+      text: "Show me all materials and their production sites",
+      icon: "🏭"
+    },
+    {
+      text: "Display the complete supply chain network with suppliers and markets",
+      icon: "🔗"
+    },
+    {
+      text: "Analyze materials with inventory levels across all sites",
+      icon: "📦"
+    }
   ];
 
   const handleSampleClick = (question) => {
@@ -165,9 +243,12 @@ const ChatQuery = () => {
               <button
                 key={idx}
                 className="sample-question-btn"
-                onClick={() => handleSampleClick(q)}
+                onClick={() => handleSampleClick(q.text)}
               >
-                {q}
+                <span className="question-icon">{q.icon}</span>
+                <div className="question-content">
+                  <div className="question-text">{q.text}</div>
+                </div>
               </button>
             ))}
           </div>
@@ -183,7 +264,9 @@ const ChatQuery = () => {
                 </div>
               ) : (
                 <div className={`message-content agent-message step-${msg.step}`}>
-                  <div className="message-text">{msg.text}</div>
+                  <div className="message-text">
+                    {msg.animated ? <AnimatedText text={msg.text} speed={20} /> : msg.text}
+                  </div>
                   {msg.query && (
                     <div className="query-block">
                       <code>{msg.query}</code>
@@ -191,13 +274,23 @@ const ChatQuery = () => {
                   )}
                   {msg.summary && (
                     <div className="summary-block">
-                      {msg.summary}
+                      {msg.summary.split('\n').map((line, i) => (
+                        <div key={i}>{line}</div>
+                      ))}
                     </div>
                   )}
                 </div>
               )}
             </div>
           ))}
+          {showTyping && (
+            <div className="message agent">
+              <div className="message-content agent-message">
+                <TypingIndicator />
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
         </div>
 
         {/* Input */}
