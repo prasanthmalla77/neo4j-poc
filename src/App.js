@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import './App.css';
 import GraphVisualization from './components/GraphVisualization';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
+import ChatQuery from './components/ChatQuery';
 import { NEO4J_CONFIG } from './services/neo4jService';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('graph'); // 'graph' or 'dashboard'
+  const [activeTab, setActiveTab] = useState('graph'); // 'graph', 'chat', or 'dashboard'
 
   return (
     <div className="App">
@@ -27,6 +28,13 @@ function App() {
             Graph View & Algorithms
           </button>
           <button
+            className={`tab-button ${activeTab === 'chat' ? 'active' : ''}`}
+            onClick={() => setActiveTab('chat')}
+          >
+            <span className="tab-icon">💬</span>
+            AI Chat Query
+          </button>
+          <button
             className={`tab-button ${activeTab === 'dashboard' ? 'active' : ''}`}
             onClick={() => setActiveTab('dashboard')}
           >
@@ -40,6 +48,12 @@ function App() {
           {activeTab === 'graph' && (
             <div className="tab-pane active">
               <GraphVisualization />
+            </div>
+          )}
+
+          {activeTab === 'chat' && (
+            <div className="tab-pane active">
+              <ChatQuery />
             </div>
           )}
 

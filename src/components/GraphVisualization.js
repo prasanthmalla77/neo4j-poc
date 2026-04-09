@@ -12,7 +12,7 @@ import './GraphVisualization.css';
 // Toggle between mock and real Neo4j data
 const USE_REAL_NEO4J = true; // Set to false to use mock data
 
-const GraphVisualization = () => {
+const GraphVisualization = ({ externalJobData = null, externalGraphData = null }) => {
   const nvlRef = useRef(null);
 
   // State management
@@ -24,8 +24,34 @@ const GraphVisualization = () => {
   const [algorithmResults, setAlgorithmResults] = useState(null);
   const [error, setError] = useState(null);
 
-  // Initialize job data and create GDS projection
+  // Handle external data from chat query
   useEffect(() => {
+    if (externalJobData && externalGraphData) {
+      console.log('[GraphViz] Received external data:', externalJobData);
+      setJobData(externalJobData);
+      const preparedData = prepareGraphData(externalJobData);
+      console.log('[GraphViz] Prepared data:', preparedData);
+      setGraphData(preparedData);
+
+      // Create GDS projection for external data
+      createGdsProjection(
+        externalJobData.jobId,
+        externalJobData.nodes,
+        externalJobData.relationships
+      ).then(projection => {
+        console.log('[GraphViz] GDS projection created:', projection);
+        setGdsProjection(projection);
+      }).catch(err => {
+        console.error('[GraphViz] Failed to create GDS projection:', err);
+        setError(err.message);
+      });
+    }
+  }, [externalJobData, externalGraphData]);
+
+  // Initialize job data and create GDS projection (only if no external data)
+  useEffect(() => {
+    if (externalJobData) return; // Skip if using external data
+
     const initializeJob = async () => {
       try {
         let job;
