@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npm install:*)",
       "Bash(timeout 5 npm start)",
-      "Bash(npm start)"
+      "Bash(npm start)",
+      "Bash(node -e:*)",
+      "Bash(node checkMissing.js:*)",
+      "Bash(del checkMissing.js)"
     ]
   }
 }
