@@ -6,7 +6,12 @@
       "Bash(npm start)",
       "Bash(node -e:*)",
       "Bash(node checkMissing.js:*)",
-      "Bash(del checkMissing.js)"
+      "Bash(del checkMissing.js)",
+      "Bash(python -c:*)",
+      "Bash(powershell -Command \"Get-Content ''d:\\\\zs associates\\\\neo4j_demo\\\\forxiga.json'' | ConvertFrom-Json | Get-Member\")",
+      "Bash(node analyze_forxiga.js:*)",
+      "Bash(node analyze_metrics.js:*)",
+      "Bash(node analyze_inventory.js:*)"
     ]
   }
 }

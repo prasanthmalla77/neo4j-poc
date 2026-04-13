@@ -8,6 +8,9 @@ const NEO4J_CONFIG = {
     database: 'test'
 };
 
+// Brand configuration
+const BRAND = 'forxiga';
+
 const driver = neo4j.driver(
     NEO4J_CONFIG.uri,
     neo4j.auth.basic(NEO4J_CONFIG.username, NEO4J_CONFIG.password)
@@ -49,6 +52,7 @@ async function createMainNode(session, node) {
     const query = `
         CREATE (n:${nodeType} {
             id: $id,
+            brand: $brand,
             node_type: $node_type,
             stage_of_manufacture: $stage_of_manufacture,
             type: $type,
@@ -72,6 +76,7 @@ async function createMainNode(session, node) {
 
     await session.run(query, {
         id: node.id,
+        brand: BRAND,
         node_type: nodeType,
         stage_of_manufacture: node.stage_of_manufacture || '',
         type: node.type || '',
@@ -101,6 +106,7 @@ async function createMaterialNodes(session, mainNodeId, materials) {
         const query = `
             MATCH (main {id: $mainNodeId})
             CREATE (m:Material {
+                brand: $brand,
                 material_code: $material_code,
                 material_name: $material_name,
                 material_type_name: $material_type_name,
@@ -108,12 +114,13 @@ async function createMaterialNodes(session, mainNodeId, materials) {
                 plant_code: $plant_code,
                 stage: $stage
             })
-            CREATE (main)-[:HAS_MATERIAL]->(m)
+            CREATE (main)-[:HAS_MATERIAL {brand: $brand}]->(m)
             RETURN m
         `;
 
         await session.run(query, {
             mainNodeId: mainNodeId,
+            brand: BRAND,
             material_code: material.material_code,
             material_name: material.material_name,
             material_type_name: material.material_type_name,
@@ -133,6 +140,7 @@ async function createMaterialLocationNodes(session, mainNodeId, materialLocation
         const query = `
             MATCH (m:Material {material_code: $material_code, plant_code: $plant_code})
             CREATE (ml:MaterialLocation {
+                brand: $brand,
                 material_identifier: $material_identifier,
                 material_code: $material_code,
                 plant_code: $plant_code,
@@ -166,11 +174,12 @@ async function createMaterialLocationNodes(session, mainNodeId, materialLocation
                 inventory_days_covered_actual: $inventory_days_covered_actual,
                 demand: $demand
             })
-            CREATE (m)-[:HAS_MATERIAL_LOCATION]->(ml)
+            CREATE (m)-[:HAS_MATERIAL_LOCATION {brand: $brand}]->(ml)
             RETURN ml
         `;
 
         await session.run(query, {
+            brand: BRAND,
             material_code: location.material_code,
             plant_code: location.plant_code,
             material_identifier: location.material_identifier || '',
@@ -215,6 +224,7 @@ async function createInventoryDataPoints(session, mainNodeId, dataPoints) {
     const query = `
         MATCH (main {id: $mainNodeId})
         CREATE (idp:InventoryDataPoints {
+            brand: $brand,
             inventory_days_covered_API: $inventory_days_covered_API,
             inventory_volume_API: $inventory_volume_API,
             inventory_projected_volume_API: $inventory_projected_volume_API,
@@ -228,12 +238,13 @@ async function createInventoryDataPoints(session, mainNodeId, dataPoints) {
             inventory_value_BULK: $inventory_value_BULK,
             inventory_projected_value_BULK: $inventory_projected_value_BULK
         })
-        CREATE (main)-[:HAS_INVENTORY_DATA]->(idp)
+        CREATE (main)-[:HAS_INVENTORY_DATA {brand: $brand}]->(idp)
         RETURN idp
     `;
 
     await session.run(query, {
         mainNodeId: mainNodeId,
+        brand: BRAND,
         inventory_days_covered_API: dataPoints.inventory_days_covered_API || 0,
         inventory_volume_API: dataPoints.inventory_volume_API || 0,
         inventory_projected_volume_API: dataPoints.inventory_projected_volume_API || 0,
@@ -257,16 +268,18 @@ async function createProductionDataPoints(session, mainNodeId, dataPoints) {
     const query = `
         MATCH (main {id: $mainNodeId})
         CREATE (pdp:ProductionDataPoints {
+            brand: $brand,
             production_budget: $production_budget,
             production_actual: $production_actual,
             production_total_year: $production_total_year
         })
-        CREATE (main)-[:HAS_PRODUCTION_DATA]->(pdp)
+        CREATE (main)-[:HAS_PRODUCTION_DATA {brand: $brand}]->(pdp)
         RETURN pdp
     `;
 
     await session.run(query, {
         mainNodeId: mainNodeId,
+        brand: BRAND,
         production_budget: dataPoints.production_budget || 0,
         production_actual: dataPoints.production_actual || 0,
         production_total_year: dataPoints.production_total_year || 0
@@ -282,13 +295,14 @@ async function createNodeConnections(session, sourceNodeId, connections) {
         const query = `
             MATCH (source {id: $sourceNodeId})
             MATCH (target {id: $targetNodeId})
-            CREATE (source)-[:SUPPLIES_TO]->(target)
+            CREATE (source)-[:SUPPLIES_TO {brand: $brand}]->(target)
         `;
 
         try {
             await session.run(query, {
                 sourceNodeId: sourceNodeId,
-                targetNodeId: targetNodeId
+                targetNodeId: targetNodeId,
+                brand: BRAND
             });
         } catch (error) {
             console.log(`  Warning: Could not create connection from ${sourceNodeId} to ${targetNodeId}`);

@@ -57,18 +57,43 @@ const ChatQuery = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, showTyping]);
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || isProcessing) return;
+  // Hardcoded questions from chatService.js - User can ONLY click these
+  const sampleQuestions = [
+    // === OPERATIONAL QUESTIONS ===
+    {
+      text: "which forxiga manufacturing and packing sites are operating above 80% capacity",
+      icon: "🏭",
+      description: "High-Capacity Sites (>80%)"
+    },
+    {
+      text: "which forxiga supply chain nodes are located in india and how many materials do they handle",
+      icon: "🇮🇳",
+      description: "India Supply Chain Network"
+    },
+    {
+      text: "which suppliers provide forxiga api materials and how many sources exist per material",
+      icon: "🧪",
+      description: "API Suppliers & Sources"
+    },
+    {
+      text: "which forxiga packing sites handle more than 30 materials",
+      icon: "📦",
+      description: "High-Volume Packing Sites"
+    }
+  ];
 
+  const handleSampleClick = async (question) => {
+    if (isProcessing) return;
+
+    // Create user message showing the selected question
     const userMessage = {
       id: Date.now(),
       type: 'user',
-      text: inputValue,
+      text: question,
       timestamp: new Date()
     };
 
     setMessages(prev => [...prev, userMessage]);
-    setInputValue('');
     setIsProcessing(true);
     setShowTyping(true);
 
@@ -104,7 +129,7 @@ const ChatQuery = () => {
 
     // Process the query
     try {
-      const result = await processChatQuery(inputValue);
+      const result = await processChatQuery(question);
 
       // Add query display message
       const queryMessage = {
@@ -225,33 +250,6 @@ const ChatQuery = () => {
     }
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
-  // Sample questions
-  const sampleQuestions = [
-    {
-      text: "Show me all materials and their production sites",
-      icon: "🏭"
-    },
-    {
-      text: "Display the complete supply chain network with suppliers and markets",
-      icon: "🔗"
-    },
-    {
-      text: "Analyze materials with inventory levels across all sites",
-      icon: "📦"
-    }
-  ];
-
-  const handleSampleClick = (question) => {
-    setInputValue(question);
-  };
-
   return (
     <div className="chat-query-container">
       {/* Left Side - Chat Interface */}
@@ -261,19 +259,20 @@ const ChatQuery = () => {
           <p>Ask questions in natural language</p>
         </div>
 
-        {/* Sample Questions */}
+        {/* Sample Questions - Show only when no messages */}
         {messages.length === 0 && (
           <div className="sample-questions">
-            <h4>Try asking:</h4>
+            <h4>📋 Select a Question:</h4>
             {sampleQuestions.map((q, idx) => (
               <button
                 key={idx}
                 className="sample-question-btn"
                 onClick={() => handleSampleClick(q.text)}
+                disabled={isProcessing}
               >
                 <span className="question-icon">{q.icon}</span>
                 <div className="question-content">
-                  <div className="question-text">{q.text}</div>
+                  <div className="question-desc">{q.text}</div>
                 </div>
               </button>
             ))}
@@ -334,24 +333,16 @@ const ChatQuery = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
-        <div className="chat-input-container">
+        {/* Input - Hidden, questions are selected from buttons above */}
+        <div className="chat-input-container" style={{ display: 'none' }}>
           <textarea
             className="chat-input"
-            placeholder="Ask a question about your graph data..."
+            placeholder="Select a question above..."
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={handleKeyPress}
-            disabled={isProcessing}
+            disabled={true}
             rows={2}
           />
-          <button
-            className="send-btn"
-            onClick={handleSendMessage}
-            disabled={isProcessing || !inputValue.trim()}
-          >
-            {isProcessing ? '⏳' : '🚀'} Send
-          </button>
         </div>
       </div>
 

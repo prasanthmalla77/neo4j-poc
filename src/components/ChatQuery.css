@@ -39,6 +39,8 @@
   padding: 20px;
   background: #F9FBFD;
   border-bottom: 2px solid #E0E0E0;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .sample-questions h4 {
@@ -63,11 +65,16 @@
   gap: 12px;
 }
 
-.sample-question-btn:hover {
+.sample-question-btn:hover:not(:disabled) {
   border-color: #0B6FCC;
   background: #E3F2FD;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(11, 111, 204, 0.15);
+}
+
+.sample-question-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .question-icon {

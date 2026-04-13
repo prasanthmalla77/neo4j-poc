@@ -1,0 +1,400 @@
+================================================================================
+        FORXIGA PHARMACEUTICAL SUPPLY CHAIN - VISUAL STRUCTURE MAP
+================================================================================
+
+TIER-BASED SUPPLY CHAIN FLOW DIAGRAM
+
+================================================================================
+TIER 1: API (ACTIVE PHARMACEUTICAL INGREDIENT) PRODUCTION
+================================================================================
+
+                            ┌─────────────────────────────────┐
+                            │  GES CM: SE SWEDEN              │
+                            │  (SK Biotek - Ireland)          │
+                            │  Plant: SSEC                    │
+                            │  Materials: 15 APIs             │
+                            └──────────────┬──────────────────┘
+                                           │
+         ┌─────────────────────────────────┼──────────────────────────────┐
+         │                                 │                              │
+    ┌────▼──────────┐            ┌────────▼────────────┐      ┌──────────▼────┐
+    │ DAPAGLIFLOZIN │            │ DAPAGLIFLOZIN       │      │ DAPAGLIFLOZIN │
+    │ DOTT LONZA    │            │ PWD SK BIOTEK       │      │ BASF VARIANT  │
+    │ (6 suppliers) │            │ (4 suppliers)       │      │ (3 suppliers) │
+    └────┬──────────┘            └────────┬────────────┘      └──────────┬────┘
+         │                                │                             │
+         └────────────────────┬───────────┴─────────────────────────────┘
+                              │
+                    ┌─────────▼─────────┐
+                    │  STORAGE NODE:    │
+                    │  Dottikon Storage │
+                    │  (2 materials)    │
+                    └──────────┬────────┘
+                               │
+                               ▼
+
+================================================================================
+TIER 2-3: MANUFACTURING & FORMULATION
+================================================================================
+
+                      ┌──────────────────────────────────────┐
+                      │   FORMULATION SITES (5 nodes)        │
+                      └──────────────────────────────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        │                           │                           │
+   ┌────▼──────────┐        ┌──────▼────────┐        ┌─────────▼──────┐
+   │  MT VERNON    │        │  SE:           │        │ CHINA TAIZHOU  │
+   │  (USA)        │        │  SNÄCKVIKEN   │        │ (CN40)         │
+   │  1448         │        │  (Sweden)     │        │ China          │
+   │  Materials:   │        │  SE01         │        │ Materials: 13  │
+   │  123 BULK     │        │  Materials:   │        │ (Raw/SF/F)     │
+   │  (6R,88SF,29F)│        │  103          │        └────────────────┘
+   │  Est. Util:   │        │  (13R,17SF,73F)│               │
+   │  85-90%       │        │  Est. Util:    │               │
+   │  CRITICAL     │        │  80-85% HIGH   │               │
+   │  Capacity     │        │                │               │
+   └────┬──────────┘        └──────┬─────────┘               │
+        │                          │                         │
+        │  ALSO: Puerto Rico (PR)  │   ALSO: Russia (RU03)  │
+        │        (14 materials)    │        (11 materials)   │
+        │                          │                         │
+        └──────────────┬───────────┴─────────────────────────┘
+                       │
+                   Formulation Output
+                 (BULK materials produced)
+                       │
+                       ▼
+
+================================================================================
+TIER 4: FINISHING & PACKING
+================================================================================
+
+                     ┌────────────────────────────────────┐
+                     │   PACKING SITES (15 nodes)         │
+                     │   Combined Materials: 319          │
+                     └────────────────────────────────────┘
+                                   │
+        ┌──────────────────────────┼──────────────────────────┐
+        │                          │                          │
+   ┌────▼─────────┐      ┌────────▼────────┐      ┌──────────▼──────┐
+   │ MACCLESFIELD │      │ SE: SNÄCKVIKEN  │      │ ASTRAZENECA     │
+   │ WORKS (UK)   │      │ PACKING (Sweden)│      │ PHARMA CO.      │
+   │ UK05         │      │ SE01 PACKING    │      │ (China)         │
+   │ Materials:   │      │ Materials: 78   │      │ CN20            │
+   │ 48           │      │ Connections: 17 │      │ Materials: 35   │
+   │ CRITICAL     │      │ (Max in network)│      │                 │
+   │ Bottleneck   │      │                 │      │                 │
+   │ (8 inputs)   │      │ ALSO: Japan     │      │ ALSO: Brazil    │
+   │              │      │ (JP10) 41 mats  │      │ (CE01) 18 mats  │
+   │ ALSO: Newark │      │                 │      │ Mexico (1000)18 │
+   │ (USA) 18 mts │      │ ALSO: India     │      │                 │
+   │              │      │ (IN10,IN11)13mt │      │ And 6 more      │
+   └────┬─────────┘      └────────┬────────┘      └───────┬─────────┘
+        │                         │                        │
+        └─────────────────────────┼────────────────────────┘
+                                  │
+                            Finished Products
+                          (Blister packs, bottles)
+                                  │
+                                  ▼
+
+================================================================================
+TIER 5: DISTRIBUTION & LOGISTICS
+================================================================================
+
+                     ┌────────────────────────────────────┐
+                     │   DISTRIBUTION HUBS (56 nodes)     │
+                     │   Combined Materials: 187          │
+                     │   Avg Connections: 1.9/node        │
+                     └────────────────────────────────────┘
+                                   │
+        ┌──────────────────────────┼──────────────────────────┐
+        │                          │                          │
+   ┌────▼─────────┐      ┌────────▼────────┐      ┌──────────▼──────┐
+   │  REGIONAL DC │      │  EMEA HUB       │      │  APAC HUB       │
+   │  NETWORKS    │      │                 │      │                 │
+   │              │      │ ├─ Hungary (UPS)│      │ ├─ Mumbai       │
+   │ ├─ Americas  │      │ │  31 materials │      │ │   9 materials │
+   │ │ (Newark,   │      │ ├─ Belgium      │      │ ├─ Delhi        │
+   │ │ Memphis)   │      │ │  (YUSEN) 6 mt │      │ ├─ Shanghai     │
+   │ │ 26 mats    │      │ ├─ Greece DC    │      │ ├─ Tokyo        │
+   │ │            │      │ │  4 materials  │      │ │   8 materials │
+   │ ├─ Canada    │      │ ├─ Sweden       │      │ ├─ Bangkok      │
+   │ │ (3PL)      │      │ │  Multiple     │      │ └─ Others       │
+   │ │ 8 mats     │      │ └─ More (15+ in │      │    27 locations │
+   │ └─ Mexico    │      │    EMEA)        │      └─────────────────┘
+   │   (Centro)   │      └─────────────────┘
+   │   16 mats    │
+   └────┬─────────┘
+        │
+        └──────────────┬──────────────────┬─────────────────┘
+                       │                  │
+                       │                  │
+        ┌──────────────▼──┐   ┌──────────▼──────────┐
+        │ EMEA MARKETS    │   │  APAC MARKETS      │
+        │ (Europe, ME)    │   │  (India, China, JP)│
+        │ 20+ Countries   │   │  12+ Countries     │
+        │ 35 nodes        │   │  31 nodes          │
+        └─────────────────┘   └────────────────────┘
+        │
+        └──────────────┬──────────────────┐
+                       │                  │
+        ┌──────────────▼──┐   ┌──────────▼──────────┐
+        │ AMERICAS MARKETS│   │  REST OF WORLD      │
+        │ (NA, LatAm)     │   │  (Other regions)    │
+        │ 9+ Countries    │   │  5+ Countries       │
+        │ 24 nodes        │   │  22 nodes           │
+        └─────────────────┘   └────────────────────┘
+
+================================================================================
+TIER 6: MARKET & CUSTOMERS
+================================================================================
+
+                          ┌─────────────────┐
+                          │   MARKETS       │
+                          │   32 endpoints  │
+                          └────────┬────────┘
+                                   │
+        ┌──────────────────────────┼──────────────────────────┐
+        │                          │                          │
+   ┌────▼──────────┐      ┌───────▼────────┐      ┌──────────▼──────┐
+   │  PATIENT:     │      │ HOSPITAL:      │      │  PHARMACY:      │
+   │  OTC/Retail   │      │ Dispensing     │      │ Retail          │
+   │  Pharmacy     │      │ Units          │      │ Network         │
+   │               │      │                │      │                 │
+   │ India Markets │      │ EMEA Markets   │      │ Regional        │
+   │ (13 locations)│      │ (15+ countries)│      │ Distribution    │
+   │               │      │                │      │                 │
+   │ Key Products: │      │ Key Products:  │      │ Key Products:   │
+   │ - FORXIGA 5mg │      │ - FORXIGA 10mg │      │ - FORXIGA 5mg   │
+   │ - FORXIGA 10mg│      │ - FARXIGA      │      │ - FORXIGA 10mg  │
+   │ (11-13 sites) │      │   variants     │      │ (11-13 sites)   │
+   └───────────────┘      └────────────────┘      └─────────────────┘
+
+================================================================================
+MATERIAL FLOW VOLUME ANALYSIS
+================================================================================
+
+STARTING POINT (TIER 1 APIs):
+  Raw Material Input
+  ├─ Dapagliflozin DOTT Lonza: 6 supplier sources
+  ├─ Dapagliflozin SK Biotek: 4 sources
+  ├─ Dapagliflozin BASF: 3 sources
+  └─ Other APIs: 8+ variants
+
+  BOTTLENECK RISK: ★★★ HIGH
+  All APIs from Europe (Ireland, Switzerland, Germany)
+  Limited non-European alternatives
+
+FORMULATION STAGE (TIER 3):
+  Input: 63 Raw Materials
+  Processing: 5 Formulation Sites
+  Output: ~120 Semi-Finished Materials
+
+  Highest Volume: Mt Vernon (123 materials) + Sweden (103)
+  BOTTLENECK RISK: ★★★ CRITICAL
+  Two sites handle 206 materials (53% of total)
+  Mt Vernon: 85-90% capacity utilization
+  Sweden: 80-85% capacity utilization
+
+PACKING STAGE (TIER 4):
+  Input: ~120 Semi-Finished Materials
+  Processing: 15 Packing Sites
+  Output: 527 Finished Products
+
+  Highest Volume: Macclesfield (48), Snäckviken (78), K.K. Japan (41)
+  BOTTLENECK RISK: ★★★ CRITICAL
+  Macclesfield has 8 input dependencies (single-point-of-failure)
+  Limited backup routing for EMEA products
+
+DISTRIBUTION STAGE (TIER 5):
+  Input: 527 Finished Products
+  Distribution: 56 Hub/DC Nodes
+  Output: Multi-location inventory (6-13 locations per high-volume SKU)
+
+  Highest Activity: India products (13 locations), EMEA products (12+ locations)
+  BOTTLENECK RISK: ★ LOW
+  Well-distributed network with good redundancy
+
+MARKET DELIVERY (TIER 6):
+  Delivery: 32 Market Endpoints across 41 countries
+  Geographic Coverage: EXCELLENT
+  Final-mile optimization: HIGH OPPORTUNITY
+
+  High-touch products (6-13 locations): 10 SKUs identified
+  Potential for 20-25% logistics consolidation
+
+================================================================================
+KEY CHOKEPOINTS & RESILIENCE MAP
+================================================================================
+
+CRITICAL DEPENDENCY MAP:
+
+                    Multiple Suppliers (Diversified)
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+              ▼               ▼               ▼
+        ┌───────────┐   ┌───────────┐   ┌──────────┐
+        │ LONZA API │   │ SK BIOTEK │   │  BASF    │
+        │(Europe)   │   │(Europe)   │   │(Europe)  │
+        └─────┬─────┘   └─────┬─────┘   └────┬─────┘
+              │               │              │
+              └───────────────┼──────────────┘
+                              │
+                    SINGLE POINT OF FAILURE
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+              ▼               ▼               ▼
+        ┌──────────┐   ┌──────────┐   ┌──────────┐
+        │ MT VERNON│   │ SWEDEN   │   │ PUERTO   │
+        │(USA)     │   │(Europe)  │   │ RICO     │
+        │123 mats  │   │103 mats  │   │14 mats   │
+        │85-90%    │   │80-85%    │   │40-50%    │
+        │CRITICAL  │   │HIGH      │   │AVAILABLE │
+        └─────┬─────┘   └─────┬─────┘   └────┬─────┘
+              │               │              │
+              └───────────────┼──────────────┘
+                              │
+                    DUAL BOTTLENECK
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+              ▼               ▼               ▼
+        ┌──────────┐   ┌──────────┐   ┌──────────┐
+        │MACCLES   │   │SNÄCKVIKEN│   │ OTHER    │
+        │(UK)      │   │(Sweden)  │   │ PACKING  │
+        │48 mats   │   │78 mats   │   │SITES     │
+        │CRITICAL  │   │17 outputs│   │(Good)    │
+        │8 inputs  │   │MAX HUBS  │   │          │
+        └─────┬─────┘   └─────┬─────┘   └────┬─────┘
+              │               │              │
+              └───────────────┼──────────────┘
+                              │
+                    56 DISTRIBUTION NODES
+                    (Good Redundancy)
+                              │
+              ┌───────────────┼───────────────┐
+              │               │               │
+              ▼               ▼               ▼
+        ┌──────────┐   ┌──────────┐   ┌──────────┐
+        │ EMEA     │   │ APAC     │   │AMERICAS  │
+        │35 nodes  │   │31 nodes  │   │24 nodes  │
+        │GOOD      │   │GOOD      │   │GOOD      │
+        │(15+ DC)  │   │(multiple)│   │(multiple)│
+        └──────────┘   └──────────┘   └──────────┘
+
+================================================================================
+SUPPLY CHAIN CONNECTIVITY SCORE CARD
+================================================================================
+
+TIER ANALYSIS:
+
+Tier 1 (APIs)              ■■■■■░░░░░ 5/10  (Limited suppliers, Europe-centric)
+Tier 2 (Storage)           ■■■░░░░░░░ 3/10  (Single node)
+Tier 3 (Formulation)       ■■■■░░░░░░ 4/10  (2 critical nodes, 85-90% capacity)
+Tier 4 (Packing)           ■■■■■■░░░░ 6/10  (15 nodes but Macclesfield critical)
+Tier 5 (Distribution)      ■■■■■■■■░░ 8/10  (56 nodes, good coverage)
+Tier 6 (Market)            ■■■■■■░░░░ 6/10  (41 countries, but undefined nodes)
+────────────────────────────────────────────────────────────
+OVERALL SUPPLY CHAIN:      ■■■■■■░░░░ 6.5/10 (Capacity constraints limiting)
+
+RESILIENCE METRICS BY TIER:
+
+Tier 1: API Production     ⚠ WARNING - No geographic diversification
+        └─ Action: Develop APAC API sourcing (18-36 months)
+
+Tier 3: Formulation        ⚠ CRITICAL - Mt Vernon bottleneck
+        └─ Action: Shift 20-30% load to Puerto Rico (12-24 months)
+
+Tier 4: Packing            ⚠ HIGH - Macclesfield complex dependencies
+        └─ Action: Implement dual-routing strategy (9-12 months)
+
+Tier 5: Distribution       ✓ GOOD - Well-distributed network
+        └─ Action: Optimize for 20-25% consolidation potential
+
+================================================================================
+MATERIAL FLOW VELOCITY BY NODE TYPE
+================================================================================
+
+                        Inventory Turnover Profile
+
+Tier 1 (APIs)           ▓▓▓░░░░░░░░░░░░░░░░░░░░░░░░  21-45 days
+Tier 3 (Formulation)    ▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░  30-60 days
+Tier 4 (Packing)        ▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░░░  14-30 days
+Tier 5 (Distribution)   ▓▓░░░░░░░░░░░░░░░░░░░░░░░░░░  7-14 days
+
+INVENTORY DAYS IMPLIED:
+  ├─ Distribution: Low (fast turnover, <2 weeks)
+  ├─ Packing: Medium (batch production, 2-4 weeks)
+  ├─ Formulation: High (manufacturing cycles, 4-8 weeks)
+  └─ APIs: Medium (batch sourcing, 3-6 weeks)
+
+WORKING CAPITAL OPPORTUNITY:
+  Estimated inventory value held across 112 nodes: Unknown (data gap)
+  Potential for 10-15% reduction through optimization
+  Potential cash release: $10-20M (estimated)
+
+================================================================================
+GEOGRAPHIC FOOTPRINT & STRATEGIC POSITIONING
+================================================================================
+
+EUROPEAN CLUSTER (EMEA)
+  ├─ Manufacturing Hub: Sweden (Formulation + Packing)
+  ├─ Packing Centers: UK, Spain, Poland, others (9+ locations)
+  ├─ API Sourcing: Ireland (SK Biotek), Switzerland (Dottikon, BASF)
+  ├─ Distribution: Belgium, Hungary, Greece (8+ centers)
+  ├─ Market Reach: 20 countries
+  └─ Supply Chain Depth: MEDIUM (complex, but localized)
+
+ASIA-PACIFIC CLUSTER (APAC)
+  ├─ Manufacturing Hub: India (12 sites across 7 cities)
+  ├─ Packing Centers: China, Japan, Thailand (3+ locations)
+  ├─ API Sourcing: Europe (gap - opportunity for Asian suppliers)
+  ├─ Distribution: Regional DCs in Mumbai, Shanghai, Tokyo (15+ centers)
+  ├─ Market Reach: 12 countries
+  └─ Supply Chain Depth: GOOD (well-distributed, but API dependency)
+
+AMERICAS CLUSTER
+  ├─ Manufacturing Hub: USA (Mt Vernon formulation), Puerto Rico
+  ├─ Packing: Distributed (USA, Mexico, Brazil)
+  ├─ API Sourcing: Europe (long lead times)
+  ├─ Distribution: USA (Memphis, Newark), Canada (3PL), Mexico, Brazil
+  ├─ Market Reach: 9 countries
+  └─ Supply Chain Depth: MEDIUM (hub-and-spoke from Mt Vernon)
+
+SUPPLY CHAIN SUSTAINABILITY:
+  Tier 3-4 bottleneck in Mt Vernon → 3-month lead time for new capacity
+  EMEA bottleneck in Sweden/UK → 2-3 month resolution
+  APAC dependency on Europe APIs → 4-6 month supply lead times
+
+================================================================================
+CONCLUSION: SUPPLY CHAIN STRUCTURE ASSESSMENT
+================================================================================
+
+STRENGTHS:
+  ✓ Global distribution network (41 countries, 56 DCs)
+  ✓ Multiple packing sites (15 locations)
+  ✓ Diversified API suppliers (4-6 per material)
+  ✓ Regional manufacturing presence (EMEA, APAC, Americas)
+  ✓ Strong APAC emerging market positioning (13 India sites)
+
+WEAKNESSES:
+  ✗ Mt Vernon capacity bottleneck (85-90% utilization)
+  ✗ Macclesfield Works single-point-of-failure (8 input dependencies)
+  ✗ European API concentration (no Asian alternatives)
+  ✗ Formulation capacity limited to 5 sites (only 2 have spare capacity)
+  ✗ High SKU complexity (382 variants, potential 25-30% reduction)
+
+OPPORTUNITIES:
+  1. Shift Mt Vernon load to Puerto Rico (3-7M savings, 12-24 mo)
+  2. Consolidate distribution from 56→35-40 nodes (3-6M savings, 9-18 mo)
+  3. Develop APAC API suppliers (risk reduction, 18-36 mo)
+  4. Rationalize SKUs from 382→280 (5-10M savings, 6-18 mo)
+  5. Implement supply chain visibility platform (10-20M WC release, 12-24 mo)
+
+OVERALL HEALTH: 7.2/10 (Good structure, requires optimization for growth)
+
+================================================================================

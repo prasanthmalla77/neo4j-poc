@@ -28,11 +28,17 @@ const HIGHLIGHT_COLORS = {
  * @returns {Object} NVL-formatted node
  */
 export const convertToNvlNode = (node) => {
+  // Get the Neo4j label for coloring
+  const nodeLabel = node.labels && node.labels.length > 0 ? node.labels[0] : 'Unknown';
+
+  // Use LABELS property if available, otherwise fall back to Neo4j label
+  const caption = node.properties?.LABELS || nodeLabel;
+
   return {
     id: node.id,
     size: 25,
-    color: getNodeColorByLabel(node.labels[0]),
-    caption: node.properties?.name || node.id,
+    color: getNodeColorByLabel(nodeLabel),
+    caption: caption,
     labels: node.labels,
     properties: node.properties
   };
@@ -55,24 +61,24 @@ export const convertToNvlRelationship = (relationship) => {
 };
 
 /**
- * Get default color for a node label
+ * Get default color for a node label - Forxiga Supply Chain
  * @param {string} label - Node label
  * @returns {string} Hex color
  */
 export const getNodeColorByLabel = (label) => {
   const colorMap = {
-    'Material': '#4CAF50',
-    'Site': '#0B6FCC',
-    'Market': '#FF9800',
-    'Warehouse': '#9C27B0',
-    'MaterialLocation': '#00BCD4',
-    'InventoryActuals': '#F44336',
-    'Forecast': '#FFC107',
-    'ActualSales': '#E91E63',
-    'ProductionActuals': '#673AB7',
-    'BOM': '#795548',
-    'Organisation': '#607D8B',
-    'PerformanceMetric': '#009688'
+    'RSM': '#8B4513',              // Brown - Raw Supplier Materials
+    'RM': '#FF6B6B',               // Red - Raw Materials
+    'Intermediate': '#FFA500',      // Orange - Intermediate products
+    'API': '#4169E1',              // Royal Blue - Active Pharmaceutical Ingredient
+    'Formulation': '#32CD32',      // Lime Green - Formulation sites
+    'Packing': '#9370DB',          // Medium Purple - Packing/Final Product sites
+    'Storage': '#FFD700',          // Gold - Storage locations
+    'Customer_Market': '#FF1493',  // Deep Pink - Customer Markets
+    'Material': '#4CAF50',         // Green - Material nodes
+    'MaterialLocation': '#00BCD4', // Cyan - Material Location nodes
+    'InventoryDataPoints': '#FFC107',  // Amber - Inventory data
+    'ProductionDataPoints': '#9C27B0'  // Purple - Production data
   };
   return colorMap[label] || '#757575';
 };

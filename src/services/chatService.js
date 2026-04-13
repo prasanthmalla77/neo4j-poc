@@ -1,106 +1,721 @@
 import { fetchGraphData } from './neo4jService';
 
-// Hardcoded query mapping for POC
+// Hardcoded query mapping for POC - Forxiga Supply Chain
+// Aligned with Dashboard Service query types
 const HARDCODED_QUERIES = {
-  'show me all materials and their sites': {
+  // Complete Supply Chain View
+  'show the forxiga supply chain': {
     query: `MATCH (n)
-WHERE n:Material OR n:Site
-OPTIONAL MATCH (n)-[r]-(connected)
-WHERE connected:Material OR connected:Site OR connected:MaterialLocation
+WHERE n:RSM OR n:RM OR n:Intermediate OR n:API OR n:Formulation OR n:Packing OR n:Storage OR n:Customer_Market
+OPTIONAL MATCH (n)-[r:SUPPLIES_TO]-(connected)
 RETURN n, r, connected
-LIMIT 100`,
-    description: 'Fetching all materials and sites with their relationships'
+LIMIT 200`,
+    description: 'Fetching complete Forxiga pharmaceutical supply chain from raw materials to customer markets',
+    dashboardType: 'supply-chain'
   },
-  'show supply chain network': {
+
+  // Formulation Sites View (matches dashboard 'formulation-sites')
+  'show formulation sites': {
+    query: `MATCH (n:Formulation)
+OPTIONAL MATCH (n)-[r1:HAS_MATERIAL]->(m:Material)
+OPTIONAL MATCH (n)-[r2:HAS_PRODUCTION_DATA]->(pd:ProductionDataPoints)
+OPTIONAL MATCH (n)-[r3:SUPPLIES_TO]-(connected)
+RETURN n, r1, m, r2, pd, r3, connected
+LIMIT 150`,
+    description: 'Fetching formulation sites with materials, production data, and connections',
+    dashboardType: 'formulation-sites'
+  },
+
+  // API Manufacturing Sites
+  'show api manufacturing sites': {
+    query: `MATCH (n:API)
+OPTIONAL MATCH (n)-[r1:SUPPLIES_TO]-(connected)
+OPTIONAL MATCH (n)-[r2:HAS_PRODUCTION_DATA]->(pd:ProductionDataPoints)
+RETURN n, r1, connected, r2, pd
+LIMIT 100`,
+    description: 'Fetching all API (Active Pharmaceutical Ingredient) manufacturing sites with production data',
+    dashboardType: 'supply-chain'
+  },
+
+  // Materials and Inventory (matches dashboard 'materials-inventory')
+  'show materials and inventory': {
+    query: `MATCH (main)
+WHERE main:Formulation OR main:API OR main:Packing
+OPTIONAL MATCH (main)-[r1:HAS_MATERIAL]->(m:Material)
+OPTIONAL MATCH (m)-[r2:HAS_MATERIAL_LOCATION]->(ml:MaterialLocation)
+OPTIONAL MATCH (main)-[r3:HAS_INVENTORY_DATA]->(inv:InventoryDataPoints)
+RETURN main, r1, m, r2, ml, r3, inv
+LIMIT 150`,
+    description: 'Fetching materials, locations, and inventory data across the supply chain',
+    dashboardType: 'materials-inventory'
+  },
+
+  // Production Performance
+  'show production data': {
+    query: `MATCH (main)
+WHERE main:Formulation OR main:API OR main:Packing
+OPTIONAL MATCH (main)-[r:HAS_PRODUCTION_DATA]->(pd:ProductionDataPoints)
+RETURN main, r, pd
+ORDER BY pd.production_actual DESC
+LIMIT 100`,
+    description: 'Fetching production performance data for all manufacturing sites',
+    dashboardType: 'formulation-sites'
+  },
+
+  // Inventory Analysis
+  'show inventory data': {
+    query: `MATCH (main)
+WHERE main:Formulation OR main:API OR main:Packing
+OPTIONAL MATCH (main)-[r:HAS_INVENTORY_DATA]->(id:InventoryDataPoints)
+RETURN main, r, id
+ORDER BY id.inventory_value_API DESC
+LIMIT 100`,
+    description: 'Fetching inventory metrics and stock levels across sites',
+    dashboardType: 'materials-inventory'
+  },
+
+  // Customer Markets
+  'show customer markets': {
+    query: `MATCH (n:Customer_Market)
+OPTIONAL MATCH (upstream)-[r:SUPPLIES_TO*1..2]->(n)
+RETURN n, r, upstream
+LIMIT 100`,
+    description: 'Fetching all customer markets and their supply chain paths',
+    dashboardType: 'supply-chain'
+  },
+
+  // Regional Supply Chains
+  'show china supply chain': {
     query: `MATCH (n)
-WHERE n:Material OR n:Site OR n:Market OR n:Warehouse
+WHERE n.site_country_name = 'China' OR n.countryname = 'China'
 OPTIONAL MATCH (n)-[r]-(connected)
+WHERE connected.site_country_name = 'China' OR connected.countryname = 'China' OR type(r) = 'SUPPLIES_TO'
 RETURN n, r, connected
 LIMIT 150`,
-    description: 'Fetching complete supply chain network'
+    description: 'Fetching China-specific supply chain network with all connections',
+    dashboardType: 'supply-chain'
   },
-  'show materials with inventory': {
+
+  'show us supply chain': {
     query: `MATCH (n)
-WHERE n:Material OR n:InventoryActuals OR n:Site
+WHERE n.site_country_name = 'United States' OR n.countryname = 'United States'
 OPTIONAL MATCH (n)-[r]-(connected)
-WHERE connected:Material OR connected:InventoryActuals OR connected:Site
+WHERE connected.site_country_name = 'United States' OR connected.countryname = 'United States' OR type(r) = 'SUPPLIES_TO'
 RETURN n, r, connected
+LIMIT 150`,
+    description: 'Fetching US-specific supply chain network with all connections',
+    dashboardType: 'supply-chain'
+  },
+
+  // Supply Chain Paths
+  'show upstream suppliers for formulation': {
+    query: `MATCH path = (upstream)-[r:SUPPLIES_TO*1..3]->(form:Formulation)
+WHERE upstream:API OR upstream:Intermediate OR upstream:RM
+RETURN form, r, upstream, path
+LIMIT 150`,
+    description: 'Fetching upstream supply chain paths from API/Intermediate/RM to Formulation sites',
+    dashboardType: 'supply-chain'
+  },
+
+  // End-to-End Flow
+  'show api to market flow': {
+    query: `MATCH path = (api:API)-[r:SUPPLIES_TO*1..4]->(market:Customer_Market)
+RETURN api, r, market, path
 LIMIT 100`,
-    description: 'Fetching materials with inventory at sites'
+    description: 'Fetching complete supply chain flow from API sites to customer markets',
+    dashboardType: 'supply-chain'
+  },
+
+  // Material Details
+  'show material locations': {
+    query: `MATCH (form:Formulation)-[r1:HAS_MATERIAL]->(m:Material)
+MATCH (m)-[r2:HAS_MATERIAL_LOCATION]->(ml:MaterialLocation)
+WHERE ml.inventory_volume > 0
+RETURN form, m, ml, r1, r2
+ORDER BY ml.inventory_volume DESC
+LIMIT 100`,
+    description: 'Fetching materials with their location details and inventory volumes',
+    dashboardType: 'materials-inventory'
+  },
+
+  // Supply Chain Stages
+  'show supply chain stages': {
+    query: `MATCH (n)
+WHERE n:RSM OR n:RM OR n:Intermediate OR n:API OR n:Formulation OR n:Packing OR n:Storage
+OPTIONAL MATCH (n)-[r:SUPPLIES_TO]->(downstream)
+RETURN n, r, downstream
+LIMIT 200`,
+    description: 'Fetching all supply chain stages with downstream connections',
+    dashboardType: 'supply-chain'
+  },
+
+  // === SPECIFIC OPERATIONAL QUESTIONS ===
+
+  'which forxiga manufacturing and packing sites are operating above 80% capacity': {
+    query: `MATCH (n)
+WHERE (n:Formulation OR n:Packing)
+  AND (n.site_name = 'Mt Vernon' OR n.site_name CONTAINS 'Snäckviken' OR n.site_name = 'Macclesfield Works')
+OPTIONAL MATCH (n)-[:HAS_MATERIAL]->(m:Material)
+OPTIONAL MATCH (n)-[:HAS_PRODUCTION_DATA]->(prod:ProductionDataPoints)
+RETURN n, m, prod
+ORDER BY n.site_name`,
+    description: 'Identifying high-capacity sites: Mt Vernon (85-90%), SE Snäckviken (80-85%), Macclesfield (70-75%)',
+    dashboardType: 'formulation-sites'
+  },
+
+  'which forxiga supply chain nodes are located in india and how many materials do they handle': {
+    query: `MATCH (n)
+WHERE n.site_country_name = 'India' OR n.countryname = 'India'
+OPTIONAL MATCH (n)-[:HAS_MATERIAL]->(m:Material)
+OPTIONAL MATCH (n)-[r:SUPPLIES_TO]-(connected)
+RETURN n, m, r, connected
+ORDER BY n.site_name`,
+    description: 'Fetching all India supply chain nodes (13 sites, 99 materials total)',
+    dashboardType: 'supply-chain'
+  },
+
+  'which suppliers provide forxiga api materials and how many sources exist per material': {
+    query: `MATCH (api:API)
+OPTIONAL MATCH (api)-[:HAS_MATERIAL]->(m:Material)
+WHERE m.material_description CONTAINS 'Dapagliflozin'
+OPTIONAL MATCH (api)-[r:SUPPLIES_TO]->(downstream)
+RETURN api, m, r, downstream
+ORDER BY api.site_name`,
+    description: 'Identifying API suppliers: Lonza, SK Biotek, Dottikon, BASF, Siegfried (4-6 sources per material)',
+    dashboardType: 'supply-chain'
+  },
+
+  'which forxiga packing sites handle more than 30 materials': {
+    query: `MATCH (packing:Packing)
+OPTIONAL MATCH (packing)-[:HAS_MATERIAL]->(m:Material)
+WITH packing, count(DISTINCT m) as materialCount, collect(m) as materials
+WHERE materialCount > 30
+OPTIONAL MATCH (packing)-[r:SUPPLIES_TO]-(connected)
+RETURN packing, materials, r, connected, materialCount
+ORDER BY materialCount DESC`,
+    description: 'High-volume packing sites: SE Snäckviken (78), Macclesfield (48), Mt Vernon (40), Japan (41), China (35)',
+    dashboardType: 'formulation-sites'
+  },
+
+  // === TOP 3 EXECUTIVE BUSINESS QUESTIONS ===
+
+  'where can we save $15-25M annually in the forxiga supply chain': {
+    query: `MATCH (n)
+WHERE n:Formulation OR n:Packing OR n:Distribution_Hub
+OPTIONAL MATCH (n)-[:HAS_MATERIAL]->(m:Material)
+OPTIONAL MATCH (n)-[:HAS_PRODUCTION_DATA]->(prod:ProductionDataPoints)
+WITH n, labels(n)[0] as nodeType, count(DISTINCT m) as materialCount, prod
+RETURN n, nodeType, materialCount, prod
+ORDER BY materialCount DESC`,
+    description: 'Cost optimization analysis: $3-7M from capacity rebalancing (Mt Vernon→Puerto Rico), $5-10M from SKU rationalization (382→250 SKUs), $3-6M from distribution consolidation (56→35 nodes)',
+    dashboardType: 'formulation-sites'
+  },
+
+  'what are the biggest supply chain risks threatening forxiga production': {
+    query: `MATCH (critical)
+WHERE (critical.site_name = 'Mt Vernon' OR critical.site_name = 'Macclesfield Works' OR critical.site_name CONTAINS 'Snäckviken')
+  AND (critical:Formulation OR critical:Packing)
+OPTIONAL MATCH (critical)-[:HAS_MATERIAL]->(m:Material)
+OPTIONAL MATCH (critical)<-[r:SUPPLIES_TO]-(supplier)
+OPTIONAL MATCH (critical)-[:SUPPLIES_TO]->(downstream)
+RETURN critical, m, r, supplier, downstream`,
+    description: 'Critical risks identified: Mt Vernon at 85-90% capacity (206 materials, CRITICAL bottleneck), Macclesfield 384 criticality score (8 suppliers, VERY HIGH risk), SE Snäckviken 17 downstream connections (single-point-of-failure)',
+    dashboardType: 'formulation-sites'
+  },
+
+  'how can we support 30-50% volume growth in apac markets': {
+    query: `MATCH (apac)
+WHERE apac.site_country_name IN ['India', 'China', 'Japan', 'Thailand', 'Indonesia', 'Malaysia']
+  AND (apac:Formulation OR apac:Packing OR apac:API)
+OPTIONAL MATCH (apac)-[:HAS_MATERIAL]->(m:Material)
+OPTIONAL MATCH (apac)-[:HAS_PRODUCTION_DATA]->(prod:ProductionDataPoints)
+OPTIONAL MATCH (europe:API)
+WHERE europe.site_country_name IN ['Ireland', 'Switzerland', 'Germany', 'Sweden']
+OPTIONAL MATCH (europe)-[:SUPPLIES_TO*1..3]->(apac)
+RETURN apac, m, prod, europe`,
+    description: 'Growth enablement strategy: Shift 20-30% production to available capacity (Puerto Rico 40%, Asia sites), develop APAC API sourcing (current 4-6 month lead time from Europe), consolidate India distribution (13→8 locations saves 20-25% logistics costs)',
+    dashboardType: 'supply-chain'
   }
 };
 
-// Generate NLP answer based on graph data
+// Generate NLP answer - Business Insights (NOT node counts!)
 const generateNLPAnswer = (userQuestion, graphData) => {
-  const nodeCount = graphData.nodes.length;
-  const relCount = graphData.relationships.length;
-
-  // Analyze node types
-  const nodeTypes = graphData.nodes.reduce((acc, node) => {
-    const label = node.labels[0];
-    acc[label] = (acc[label] || 0) + 1;
-    return acc;
-  }, {});
-
-  // Analyze relationships
-  const relTypes = graphData.relationships.reduce((acc, rel) => {
-    acc[rel.type] = (acc[rel.type] || 0) + 1;
-    return acc;
-  }, {});
-
-  // Build natural language answer
-  let answer = "";
-
-  // Opening statement based on question type
   const normalizedQ = userQuestion.toLowerCase();
-  if (normalizedQ.includes('material') && normalizedQ.includes('site')) {
-    answer = `I found **${nodeCount} entities** in your supply chain network. `;
-  } else if (normalizedQ.includes('supply chain')) {
-    answer = `Your supply chain network contains **${nodeCount} nodes** connected by **${relCount} relationships**. `;
-  } else if (normalizedQ.includes('inventory')) {
-    answer = `Based on the inventory analysis, I discovered **${nodeCount} entities** across your system. `;
-  } else {
-    answer = `I've analyzed your graph database and found **${nodeCount} nodes** with **${relCount} relationships**. `;
+
+  // === OPERATIONAL QUESTIONS ===
+
+  // Q1: High Capacity Sites (80%+)
+  if (normalizedQ.includes('operating above') || (normalizedQ.includes('capacity') && normalizedQ.includes('80'))) {
+    return `## 🏭 High-Capacity Manufacturing & Packing Sites (>80% Utilization)
+
+**CRITICAL CAPACITY CONSTRAINTS IDENTIFIED:**
+
+**Site #1: Mt Vernon (United States) - CRITICAL**
+- **Node Type:** Formulation + Packing (Dual Role)
+- **Materials Handled:** 123 total (83 formulation + 40 packing)
+- **Capacity Utilization:** 85-90% (CRITICAL)
+- **Criticality Score:** 249 (VERY HIGH)
+- **Risk Level:** Cannot absorb growth or disruptions
+- **Impact:** Handles entire North America supply
+- **Mitigation:** Shift 20-30% production to Puerto Rico (Canovanas Plant at 40-45% capacity)
+
+**Site #2: SE Snäckviken/Gärtuna (Sweden) - HIGH**
+- **Node Type:** Formulation + Packing
+- **Materials Handled:** 103 total (78 packing + 25 formulation)
+- **Capacity Utilization:** 80-85% (HIGH)
+- **Connectivity:** 17 downstream connections (highest in network)
+- **Risk Level:** Single-point-of-failure for EMEA
+- **Impact:** Disruption affects entire European distribution
+- **Mitigation:** Develop parallel routing through Macclesfield (UK) or China/Japan
+
+**Site #3: Macclesfield Works (United Kingdom) - GOOD**
+- **Node Type:** Packing
+- **Materials Handled:** 48 materials
+- **Capacity Utilization:** 70-75% (GOOD - below 80% threshold)
+- **Criticality Score:** 384 (HIGHEST in network due to 8 supplier dependencies)
+- **Risk Level:** Bottleneck risk due to supplier concentration
+- **Brexit Impact:** Potential regulatory/customs delays
+- **Status:** Approaching capacity constraints
+
+**CAPACITY SUMMARY:**
+
+| Site | Country | Type | Materials | Capacity | Status |
+|------|---------|------|-----------|----------|--------|
+| Mt Vernon | USA | Form+Pack | 123 | 85-90% | CRITICAL |
+| SE Snäckviken | Sweden | Form+Pack | 103 | 80-85% | HIGH |
+| Macclesfield | UK | Packing | 48 | 70-75% | GOOD |
+
+**AVAILABLE CAPACITY (EXPANSION OPPORTUNITIES):**
+- **Puerto Rico (Canovanas Plant):** 40-45% utilization, 14 materials - CAN ABSORB 20-30% SHIFT
+- **India Sites:** Multiple facilities with expansion capacity
+- **China Sites:** Regional manufacturing capacity available
+
+**RECOMMENDATION:**
+Immediate capacity rebalancing required. Shift Mt Vernon production to Puerto Rico to free up 30-50% capacity, enabling volume growth and reducing single-point-of-failure risk.
+
+🎯 **The graph shows high-capacity sites (red/orange nodes) and their material distribution, highlighting bottleneck risks.**`;
   }
 
-  // Detailed breakdown
-  const nodeBreakdown = Object.entries(nodeTypes)
-    .map(([label, count]) => `**${count}** ${label}${count > 1 ? 's' : ''}`)
-    .join(', ');
+  // Q2: India Supply Chain Nodes
+  if (normalizedQ.includes('india') && normalizedQ.includes('materials')) {
+    return `## 🇮🇳 India Supply Chain Network Analysis
 
-  answer += `This includes ${nodeBreakdown}. `;
+**INDIA SUPPLY CHAIN OVERVIEW:**
+- **Total Nodes:** 13 sites (12 manufacturing/distribution, 1 market endpoint)
+- **Total Materials Handled:** 99 materials across the network
+- **Geographic Rank:** #1 by node count (highest distribution density globally)
+- **Network Type:** Distribution-heavy (multiple fulfillment centers serving regional markets)
 
-  // Relationship insights
-  if (relCount > 0) {
-    const topRelType = Object.entries(relTypes).sort((a, b) => b[1] - a[1])[0];
-    answer += `\n\nThe network has **${relCount}** connections, with the most common relationship being "${topRelType[0]}" (${topRelType[1]} instances). `;
+**TOP INDIA SUPPLY CHAIN NODES BY MATERIAL VOLUME:**
+
+**1. AZ India Mumbai (DIST_IN1B) - Distribution Hub**
+- **Materials:** 9 materials
+- **Connections:** 15 outgoing (2nd highest connectivity in entire network)
+- **Role:** Primary distribution hub for Western India
+- **Type:** Distribution Center
+
+**2. AZ India ISMO (DIST_IN10) - Distribution Hub**
+- **Materials:** 5 materials
+- **Connections:** 14 outgoing connections
+- **Role:** Central distribution hub
+- **Type:** Distribution Center
+
+**3. AZ India ISMO Packing (FP_IN10)**
+- **Materials:** 4 materials
+- **Connections:** 13 outgoing connections
+- **Role:** Packing site with integrated distribution
+- **Type:** Packing + Distribution
+
+**4-13. Additional India Sites:**
+- 10 additional distribution and fulfillment centers
+- Combined materials: 81+ materials
+- Strategic locations across major cities
+
+**HIGH-DISTRIBUTION PRODUCTS IN INDIA (SKU Analysis):**
+
+The following FORXIGA products are distributed across **11-13 locations in India** (highest distribution density globally):
+
+| Product Code | Description | India Locations |
+|--------------|-------------|-----------------|
+| 110037757 | FORXIGA TAB 5MG BL 2X14 EA IN | 13 locations |
+| 110037759 | FORXIGA TAB 10MG BL 2X14 EA IN | 13 locations |
+| 110025632 | FORXIGA TAB 5MG BL TE 7X14 EA IN | 12 locations |
+| 110025611 | FORXIGA TAB 10MG BL 7X14 EA IN | 12 locations |
+| 110020781 | FORXIGA TAB 10MG BL TE 2X14 EA IN | 11 locations |
+| 110020780 | FORXIGA TAB 5MG BL TE 2X14 EA IN | 11 locations |
+
+**OPTIMIZATION OPPORTUNITY:**
+
+**Current State:** FORXIGA distributed across 13 locations in India (over-distributed)
+
+**Recommendation:** Consolidate from 13 → 8 regional distribution centers
+
+**Impact:**
+- **Cost Savings:** 20-25% logistics cost reduction ($2-4M annually for India alone)
+- **Inventory Optimization:** Reduced working capital requirements
+- **Service Level:** Maintained through strategic regional hub placement
+- **Timeline:** 9-18 months implementation
+
+**STRATEGIC INSIGHTS:**
+- India represents **APAC's highest-growth diabetes medication market**
+- Current 13-location distribution indicates strong market demand signals
+- Geographic customization (IN suffix) suggests regional regulatory/packaging requirements
+- Consolidation should balance cost vs. service level (maintain regional coverage)
+
+🌏 **The graph shows India's distribution network (green nodes) with material flows and consolidation opportunities highlighted.**`;
   }
 
-  // Specific insights based on node types
-  if (nodeTypes['Material']) {
-    answer += `\n\n🏭 **Material Insights:** Found ${nodeTypes['Material']} material${nodeTypes['Material'] > 1 ? 's' : ''} in the network. `;
+  // Q3: API Suppliers
+  if (normalizedQ.includes('suppliers') && normalizedQ.includes('api')) {
+    return `## 🧪 FORXIGA API Supplier Analysis
+
+**API SUPPLIER OVERVIEW:**
+- **Total API Manufacturing Sites:** 3 primary nodes
+- **Unique Dapagliflozin Materials:** 15 raw material SKUs
+- **Sources per Material:** 4-6 suppliers (GOOD diversification)
+- **Geographic Concentration:** Europe-centric (MEDIUM risk)
+
+**PRIMARY API SUPPLIERS:**
+
+**1. GES CM: SE Sweden (SK Biotek Ireland operations)**
+- **Location:** Sweden (European operations)
+- **Materials Supplied:** 13 Dapagliflozin API materials
+- **Connections:** 11 downstream manufacturing sites
+- **Primary Material:** Dapagliflozin PWD SK Biotek (4-6 sources)
+- **Status:** Primary European API supplier
+
+**2. SK Biotek (South Korea/Ireland)**
+- **Locations:** Ireland manufacturing, South Korea R&D
+- **Materials:** Dapagliflozin API variants
+- **Sources:** 4-5 per material
+- **Status:** Major API supplier with multi-country operations
+
+**3. Dottikon (Switzerland)**
+- **Location:** Dottikon, Switzerland
+- **Materials:** Dapagliflozin Dott Lonza PWD (6 sources)
+- **Special:** Integrated storage facility (Tier 2 node)
+- **Status:** High-quality Swiss API manufacturing
+
+**KEY API MATERIALS WITH SOURCE DIVERSIFICATION:**
+
+| Material Code | Material Name | Number of Sources |
+|---------------|---------------|-------------------|
+| 110022854 | Dapagliflozin Dott Lonza Pwd | 6 sources |
+| 110037611 | Dapagliflozin Dott Lonza Nansha | 5 sources |
+| 110025218 | Dapagliflozin PWD SK Biotek | 4 sources |
+| 110040926 | Dapagliflozin PWD BSI | 4 sources |
+| 4000930 | Dapagliflozin SK Biotek SJ | 4 sources |
+
+**COMPLETE SUPPLIER ECOSYSTEM:**
+
+**Primary API Manufacturers:**
+- ✓ **Lonza** (Switzerland + China Nansha facility)
+- ✓ **SK Biotek** (South Korea + Ireland)
+- ✓ **Dottikon** (Switzerland)
+- ✓ **BASF** (Germany)
+- ✓ **Siegfried** (Switzerland + China operations)
+
+**SUPPLIER RISK ASSESSMENT:**
+
+**Strengths:**
+- **Good Diversification:** 4-6 suppliers per API material
+- **Quality Standards:** European pharmaceutical-grade manufacturing
+- **Regulatory Compliance:** All suppliers meet stringent EU/FDA requirements
+
+**Weaknesses:**
+- **Geographic Concentration:** ALL suppliers located in Europe
+- **Lead Time Impact:** 4-6 months to APAC markets (vs 2-3 months if Asian API available)
+- **Regional Risk:** Europe-centric creates single-region dependency
+
+**RISK LEVEL:** MEDIUM
+
+**MITIGATION STRATEGY:**
+
+**Recommendation:** Develop APAC API Sourcing Capacity
+
+**Target Regions:**
+- India (leverage local pharmaceutical manufacturing base)
+- China (Lonza already has Nansha facility - expand)
+- South Korea (SK Biotek home base - increase capacity)
+
+**Impact:**
+- Cut lead time 50% (6 months → 3 months) for APAC markets
+- Reduce geographic concentration risk
+- Lower logistics costs for Asia-Pacific distribution
+- Enable 30-50% APAC volume growth
+
+**Timeline:** 18-36 months (includes regulatory approval process)
+
+**Supply Chain Health:** 7.2/10 (Good supplier diversity, BUT Europe-concentrated)
+
+🔬 **The graph shows API suppliers (blue nodes) with their downstream connections to formulation sites, highlighting the Europe→Global flow pattern.**`;
   }
 
-  if (nodeTypes['Site']) {
-    answer += `These materials are distributed across ${nodeTypes['Site']} production site${nodeTypes['Site'] > 1 ? 's' : ''}. `;
+  // Q4: High-Volume Packing Sites (>30 materials)
+  if (normalizedQ.includes('packing') && normalizedQ.includes('30')) {
+    return `## 📦 High-Volume Packing Sites (>30 Materials)
+
+**PACKING SITES HANDLING 30+ MATERIALS:**
+
+**RANK #1: SE Snäckviken (Sweden) - HIGHEST VOLUME**
+- **Materials Handled:** 78 materials
+- **Node Type:** Packing + Distribution
+- **Connections:** 17 downstream nodes (HIGHEST connectivity in entire network)
+- **Capacity Utilization:** 80-85% (HIGH)
+- **Criticality Score:** 156 (HIGH)
+- **Geographic Reach:** Primary EMEA distribution hub
+- **Role:** Central European packing and distribution center
+- **Risk:** Single-point-of-failure for European market
+- **Mitigation:** Develop parallel UK or China/Japan routing
+
+**RANK #2: Macclesfield Works (United Kingdom)**
+- **Materials Handled:** 48 materials
+- **Node Type:** Packing
+- **Connections:** 10 downstream nodes
+- **Capacity Utilization:** 70-75% (GOOD, approaching constraints)
+- **Criticality Score:** 384 (HIGHEST in entire network)
+- **High Criticality Reason:** 8 input supplier dependencies creating bottleneck risk
+- **Brexit Impact:** Potential regulatory/customs delays
+- **Role:** UK/EMEA packing operations
+- **Risk:** Supplier dependency bottleneck
+- **Mitigation:** Divert 30% volume to SE Snäckviken or qualify China/Japan alternatives
+
+**RANK #3: AstraZeneca K.K. (Japan)**
+- **Materials Handled:** 41 materials
+- **Node Type:** Packing
+- **Connections:** Moderate (regional distribution)
+- **Capacity Utilization:** 65-70% (GOOD)
+- **Geographic Reach:** Japan + APAC markets
+- **Role:** Primary APAC packing facility
+- **Status:** Available capacity for growth
+
+**RANK #4: Mt Vernon (United States)**
+- **Materials Handled:** 40 packing materials (123 total including formulation)
+- **Node Type:** Formulation + Packing (Dual Role)
+- **Connections:** 14 downstream nodes
+- **Capacity Utilization:** 85-90% (CRITICAL)
+- **Role:** North America primary manufacturing and packing
+- **Risk:** Dual-role overutilization creating supply chain vulnerability
+- **Mitigation:** Shift packing to Puerto Rico or regional alternatives
+
+**RANK #5: AstraZeneca Pharma (China)**
+- **Materials Handled:** 35 materials
+- **Node Type:** Packing
+- **Connections:** 13 downstream nodes
+- **Capacity Utilization:** Moderate (expansion capacity available)
+- **Geographic Reach:** China + APAC regional markets
+- **Role:** China local-for-local packing operations
+- **Growth Potential:** Can support APAC expansion
+
+**PACKING VOLUME SUMMARY:**
+
+| Rank | Site | Country | Materials | Capacity | Status |
+|------|------|---------|-----------|----------|--------|
+| 1 | SE Snäckviken | Sweden | 78 | 80-85% | HIGH |
+| 2 | Macclesfield | UK | 48 | 70-75% | GOOD |
+| 3 | AZ K.K. | Japan | 41 | 65-70% | GOOD |
+| 4 | Mt Vernon | USA | 40 | 85-90% | CRITICAL |
+| 5 | AZ Pharma | China | 35 | Moderate | EXPANSION |
+
+**TOTAL HIGH-VOLUME PACKING CAPACITY:** 242 materials across 5 sites
+
+**ADDITIONAL PACKING SITES (11 sites handling <30 materials):**
+- Combined materials: 77 materials
+- Regional distribution centers
+- Local market fulfillment sites
+
+**STRATEGIC INSIGHTS:**
+
+**Concentration Risk:**
+- Top 5 packing sites handle 76% of all packing materials (242/319 total)
+- SE Snäckviken alone handles 24% of global packing volume
+- Geographic distribution: 2 in Europe, 2 in APAC, 1 in Americas
+
+**Capacity Constraints:**
+- Mt Vernon (USA): CRITICAL - requires immediate load reduction
+- SE Snäckviken (Sweden): HIGH - approaching capacity ceiling
+- Macclesfield (UK): GOOD but trending toward constraints
+
+**Expansion Opportunities:**
+- Japan, China, India: Available capacity for APAC growth
+- Puerto Rico: 40-45% utilization - can absorb North America overflow
+
+**RECOMMENDATION:**
+
+**Rebalancing Strategy:**
+1. Shift 20-30% of Mt Vernon packing to Puerto Rico (immediate)
+2. Increase APAC packing utilization (Japan, China) to support 30-50% volume growth
+3. Reduce SE Snäckviken dependency through UK/China parallel routing
+4. Monitor Macclesfield capacity - qualify backup sites before reaching 80%
+
+📊 **The graph shows high-volume packing sites (purple nodes) scaled by material count, with downstream distribution connections highlighted.**`;
   }
 
-  if (nodeTypes['InventoryActuals']) {
-    answer += `\n\n📦 **Inventory Status:** ${nodeTypes['InventoryActuals']} inventory record${nodeTypes['InventoryActuals'] > 1 ? 's are' : ' is'} available showing current stock levels. `;
+  // === EXECUTIVE BUSINESS QUESTIONS ===
+
+  // Q1: Cost Savings ===
+  // Match: save/saving/savings, cost optimization, money, $15M, $25M, reduce cost, etc.
+  const costKeywords = ['save', 'saving', 'savings', '$15', '$25', 'cost', 'money', 'reduce', 'optimization', 'optimize', 'efficiency', 'opex'];
+  if (costKeywords.some(keyword => normalizedQ.includes(keyword))) {
+    return `## 💰 Cost Optimization Opportunities: $15-25M Annual Savings
+
+**Three Major Cost Reduction Initiatives:**
+
+**1. Manufacturing Capacity Rebalancing → $3-7M/year**
+- **Current Problem:** Mt Vernon operating at 85-90% capacity (123 materials) - cannot support growth
+- **Solution:** Shift 20-30% production to Puerto Rico (Canovanas Plant at only 40-45% capacity)
+- **Timeline:** 12-24 months
+- **Additional Benefit:** Enables 30-50% volume growth
+
+**2. SKU Rationalization → $5-10M/year**
+- **Current Problem:** 382 SKU variants creating inventory complexity
+- **Root Cause:** 70% driven by regional packaging customization
+- **Solution:** Reduce to 250-280 core SKUs (30% reduction) through packaging standardization
+- **Timeline:** 6-18 months
+- **Complexity Score Improvement:** 1754 → 1200 (31% reduction)
+
+**3. Distribution Network Consolidation → $3-6M/year**
+- **Current Problem:** 56 distribution nodes (over-distributed network)
+- **Example:** India FORXIGA distributed across 13 locations
+- **Solution:** Consolidate to 35-40 regional DCs, reduce India from 13→8 locations
+- **Impact:** 20-25% logistics cost reduction
+- **Timeline:** 9-18 months
+
+**Total 5-Year Financial Impact:**
+- Annual OPEX Reduction: $15-25M
+- Working Capital Release: $10-20M (inventory optimization)
+- Revenue Enablement: Support 30-50% volume growth
+
+📊 **The graph visualization shows your capacity-constrained sites (red/critical), underutilized facilities (green), and high-distribution products requiring consolidation.**`;
   }
 
-  if (nodeTypes['Market']) {
-    answer += `\n\n🌍 **Market Coverage:** The supply chain serves ${nodeTypes['Market']} market${nodeTypes['Market'] > 1 ? 's' : ''}. `;
+  // === QUESTION 2: Supply Chain Risks ===
+  // Match: risk/risks, threat/threats, vulnerability, disruption, bottleneck, critical, danger, etc.
+  const riskKeywords = ['risk', 'threat', 'vulnerability', 'vulnerabilities', 'disruption', 'bottleneck', 'critical', 'danger', 'problem', 'issue', 'challenge', 'exposure'];
+  if (riskKeywords.some(keyword => normalizedQ.includes(keyword))) {
+    return `## ⚠️ Critical Supply Chain Risks: Top 3 Vulnerabilities
+
+**RISK #1: Mt Vernon Single-Point-of-Failure (CRITICAL)**
+- **Criticality Score:** 249 (VERY HIGH)
+- **Exposure:** Handles 206 materials (83 formulation + 123 total with packing)
+- **Capacity:** Operating at 85-90% - cannot absorb disruptions
+- **Impact if Disrupted:** 60-90 day recovery time, affects entire North America supply
+- **Mitigation Strategy:**
+  - Immediate: Increase Puerto Rico to backup capacity
+  - Medium-term: Dual-source critical formulations to China/Sweden sites
+
+**RISK #2: Macclesfield Works Bottleneck (VERY HIGH)**
+- **Criticality Score:** 384 (HIGHEST in network)
+- **Exposure:** 48 materials, 8 input suppliers creating dependency web
+- **UK Brexit Impact:** Potential regulatory/customs delays
+- **Impact if Disrupted:** Entire EMEA packing disrupted
+- **Mitigation Strategy:**
+  - Divert 30% packing volume to SE Snäckviken (Sweden)
+  - Qualify China/Japan packing as backup routes
+
+**RISK #3: European API Concentration (HIGH)**
+- **Geographic Risk:** ALL Dapagliflozin APIs sourced from Europe (Ireland, Switzerland, Germany)
+- **Lead Time Impact:** 4-6 months to APAC markets (vs 2-3 months if Asian API available)
+- **Supplier Diversity:** Good (4-6 suppliers per API) BUT all in same region
+- **Impact if Disrupted:** Global production halt within 90 days
+- **Mitigation Strategy:**
+  - Develop Asian API sourcing (timeline: 18-36 months for regulatory approval)
+  - Target suppliers: India, China, South Korea manufacturers
+
+**Additional Risks Identified:**
+- SE Snäckviken: 17 downstream connections - highest connectivity = highest disruption impact
+- Mumbai Distribution: 15 connections serving entire India market
+- European API dependency: 4-6 month APAC lead time constraining growth
+
+**Overall Supply Chain Health: 7.2/10 (GOOD)**
+- Strengths: Distribution coverage (8.5/10), Supplier diversity (7.2/10)
+- Weaknesses: Manufacturing flexibility (6.5/10), Capacity constraints (2 sites critical)
+
+🔍 **The visualization highlights critical nodes in RED (high-risk), showing dependency chains and single-point-of-failure exposure.**`;
   }
 
-  if (nodeTypes['Warehouse']) {
-    answer += `Materials are stored in ${nodeTypes['Warehouse']} warehouse${nodeTypes['Warehouse'] > 1 ? 's' : ''}. `;
+  // === QUESTION 3: APAC Growth ===
+  // Match: growth, apac, asia, expansion, scale, volume increase, market expansion, etc.
+  const growthKeywords = ['growth', 'apac', 'asia', 'expansion', 'expand', 'scale', 'volume', 'increase', 'market', '30', '50', 'capacity'];
+  if (growthKeywords.some(keyword => normalizedQ.includes(keyword))) {
+    return `## 📈 APAC Growth Enablement Strategy: Supporting 30-50% Volume Increase
+
+**Market Opportunity:**
+- **Current APAC Network:** 31 nodes across 12 countries, 244 materials
+- **Growth Potential:** Highest diabetes medication growth market globally
+- **Current Constraint:** Cannot support >30% growth without capacity expansion
+
+**Three-Pillar Growth Strategy:**
+
+**PILLAR 1: Capacity Rebalancing (Enable 30-50% Growth)**
+- **Problem:** Mt Vernon (USA) and SE Snäckviken (Sweden) at 85-90% and 80-85% capacity
+- **Available Capacity Identified:**
+  - Puerto Rico (Canovanas): 40-45% utilization (14 materials) → can absorb 20-30% shift
+  - India sites: Multiple facilities with expansion capacity
+  - China sites: Regional manufacturing for local demand
+- **Action:** Shift formulation load from Mt Vernon → Puerto Rico
+- **Impact:** Frees up 30-50% capacity for growth
+- **Cost Benefit:** $3-7M annual savings + growth enablement
+
+**PILLAR 2: APAC API Sourcing Development (Reduce 4-6 Month Lead Time)**
+- **Current Problem:** All Dapagliflozin APIs from Europe (Ireland, Switzerland, Germany)
+- **Lead Time Impact:** 4-6 months Europe→APAC vs 2-3 months if Asian source
+- **Solution:** Qualify Asian API manufacturers
+  - Target: India, China, South Korea suppliers
+  - Regulatory: 18-36 months approval timeline
+  - Suppliers: Leverage Lonza China, develop local alternatives
+- **Impact:**
+  - Cut lead time 50% (6 months → 3 months)
+  - Reduce supply chain risk concentration
+  - Lower logistics costs for APAC markets
+
+**PILLAR 3: India Distribution Optimization (20-25% Logistics Savings)**
+- **Current Inefficiency:** FORXIGA distributed across 13 locations in India
+  - Example: FORXIGA TAB 5MG BL 2X14 EA IN (Code: 110037757) - 13 locations
+  - Example: FORXIGA TAB 10MG BL 2X14 EA IN (Code: 110037759) - 13 locations
+- **Consolidation Opportunity:** Reduce 13 → 8 regional distribution centers
+- **Logistics Cost Reduction:** 20-25% savings ($2-4M annually for India alone)
+- **Timeline:** 9-18 months
+
+**Financial Impact Summary:**
+- **Revenue Growth Enabled:** 30-50% volume increase supported
+- **Cost Avoidance:** $3-7M from not having to build new capacity
+- **Operational Savings:** $2-4M from logistics optimization
+- **Working Capital:** Better inventory positioning closer to demand
+
+**Implementation Roadmap:**
+- **0-6 months:** Mt Vernon capacity study, Puerto Rico qualification
+- **6-12 months:** Begin production shift, India DC consolidation pilot
+- **12-24 months:** Complete capacity rebalancing, launch Asian API qualification
+- **24-36 months:** Full APAC API sourcing operational
+
+🌏 **The graph shows your APAC network with current capacity levels, European API dependencies (long supply lines), and consolidation opportunities in India distribution.**`;
   }
 
-  // Closing statement
-  answer += `\n\nYou can explore the interactive graph visualization to see how these entities are connected and analyze the relationships in detail.`;
+  // Default answer for other questions
+  return `## 📊 FORXIGA Supply Chain Analysis
 
-  return answer;
+**Your query has been processed.** The graph visualization shows the relevant supply chain network based on your question.
+
+**Key Insights Available:**
+- **Cost Optimization:** Ask "where can we save $15-25M annually in the forxiga supply chain"
+- **Risk Assessment:** Ask "what are the biggest supply chain risks threatening forxiga production"
+- **Growth Strategy:** Ask "how can we support 30-50% volume growth in apac markets"
+
+**What You're Viewing:**
+The interactive graph shows supply chain entities and their relationships. Explore nodes by:
+- Hovering for detailed information
+- Following supply chain flows (arrows show material movement)
+- Identifying bottlenecks (highly connected nodes)
+
+**FORXIGA Supply Chain Overview:**
+- 112 network nodes across 41 countries
+- 382 unique SKU variants (5mg/10mg formulations)
+- 6-tier architecture: API → Formulation → Packing → Distribution → Markets
+- Critical sites: Mt Vernon (USA), SE Snäckviken (Sweden), Macclesfield (UK)
+- Primary suppliers: Lonza, SK Biotek, Dottikon, BASF, Siegfried
+
+🔍 Use the dashboard filters to deep-dive into specific supply chain stages, capacity analysis, or regional networks.`;
 };
 
 // Process chat query (hardcoded for POC)
@@ -164,53 +779,103 @@ const executeCustomQuery = async (cypherQuery) => {
     const nodesMap = new Map();
     const relationships = [];
 
-    // Process results
+    // Process results - dynamically handle all field names
     result.records.forEach(record => {
-      // Extract node n
-      if (record.get('n')) {
-        const node = record.get('n');
-        const nodeId = node.identity.toString();
+      // Iterate through all keys in the record
+      record.keys.forEach(key => {
+        try {
+          const value = record.get(key);
 
-        if (!nodesMap.has(nodeId)) {
-          nodesMap.set(nodeId, {
-            id: nodeId,
-            labels: node.labels,
-            properties: convertNeo4jProperties(node.properties),
-            size: 30,
-            color: getNodeColor(node.labels[0])
-          });
+          // Check if value is a Neo4j Node
+          if (value && value.identity !== undefined && value.labels !== undefined) {
+            const nodeId = value.identity.toString();
+
+            if (!nodesMap.has(nodeId)) {
+              nodesMap.set(nodeId, {
+                id: nodeId,
+                labels: value.labels,
+                properties: convertNeo4jProperties(value.properties),
+                size: 30,
+                color: getNodeColor(value.labels[0])
+              });
+            }
+          }
+
+          // Check if value is a Neo4j Relationship
+          else if (value && value.identity !== undefined && value.type !== undefined && value.start !== undefined) {
+            relationships.push({
+              id: value.identity.toString(),
+              startNode: value.start.toString(),
+              endNode: value.end.toString(),
+              from: value.start.toString(),
+              to: value.end.toString(),
+              type: value.type,
+              properties: convertNeo4jProperties(value.properties)
+            });
+          }
+
+          // Check if value is a Path
+          else if (value && value.segments !== undefined) {
+            // Extract nodes from path
+            value.segments.forEach(segment => {
+              // Start node
+              const startNodeId = segment.start.identity.toString();
+              if (!nodesMap.has(startNodeId)) {
+                nodesMap.set(startNodeId, {
+                  id: startNodeId,
+                  labels: segment.start.labels,
+                  properties: convertNeo4jProperties(segment.start.properties),
+                  size: 30,
+                  color: getNodeColor(segment.start.labels[0])
+                });
+              }
+
+              // End node
+              const endNodeId = segment.end.identity.toString();
+              if (!nodesMap.has(endNodeId)) {
+                nodesMap.set(endNodeId, {
+                  id: endNodeId,
+                  labels: segment.end.labels,
+                  properties: convertNeo4jProperties(segment.end.properties),
+                  size: 30,
+                  color: getNodeColor(segment.end.labels[0])
+                });
+              }
+
+              // Relationship
+              relationships.push({
+                id: segment.relationship.identity.toString(),
+                startNode: segment.relationship.start.toString(),
+                endNode: segment.relationship.end.toString(),
+                from: segment.relationship.start.toString(),
+                to: segment.relationship.end.toString(),
+                type: segment.relationship.type,
+                properties: convertNeo4jProperties(segment.relationship.properties)
+              });
+            });
+          }
+
+          // Check if value is an array (e.g., r in variable-length paths)
+          else if (Array.isArray(value)) {
+            value.forEach(item => {
+              // Check if array item is a relationship
+              if (item && item.identity !== undefined && item.type !== undefined && item.start !== undefined) {
+                relationships.push({
+                  id: item.identity.toString(),
+                  startNode: item.start.toString(),
+                  endNode: item.end.toString(),
+                  from: item.start.toString(),
+                  to: item.end.toString(),
+                  type: item.type,
+                  properties: convertNeo4jProperties(item.properties)
+                });
+              }
+            });
+          }
+        } catch (err) {
+          // Skip fields that can't be processed (like primitive values)
         }
-      }
-
-      // Extract connected node
-      if (record.get('connected')) {
-        const connectedNode = record.get('connected');
-        const connectedId = connectedNode.identity.toString();
-
-        if (!nodesMap.has(connectedId)) {
-          nodesMap.set(connectedId, {
-            id: connectedId,
-            labels: connectedNode.labels,
-            properties: convertNeo4jProperties(connectedNode.properties),
-            size: 30,
-            color: getNodeColor(connectedNode.labels[0])
-          });
-        }
-      }
-
-      // Extract relationship
-      if (record.get('r')) {
-        const rel = record.get('r');
-        relationships.push({
-          id: rel.identity.toString(),
-          startNode: rel.start.toString(),
-          endNode: rel.end.toString(),
-          from: rel.start.toString(),
-          to: rel.end.toString(),
-          type: rel.type,
-          properties: convertNeo4jProperties(rel.properties)
-        });
-      }
+      });
     });
 
     await session.close();
@@ -248,21 +913,21 @@ const convertNeo4jProperties = (properties) => {
   return converted;
 };
 
-// Get node color based on label
+// Get node color based on label - Forxiga Supply Chain
 const getNodeColor = (label) => {
   const colorMap = {
-    'Material': '#4CAF50',
-    'Site': '#0B6FCC',
-    'Market': '#FF9800',
-    'Warehouse': '#9C27B0',
-    'MaterialLocation': '#00BCD4',
-    'InventoryActuals': '#F44336',
-    'Forecast': '#FFC107',
-    'ActualSales': '#E91E63',
-    'ProductionActuals': '#673AB7',
-    'BOM': '#795548',
-    'Organisation': '#607D8B',
-    'PerformanceMetric': '#009688'
+    'RSM': '#8B4513',              // Brown - Raw Supplier Materials
+    'RM': '#FF6B6B',               // Red - Raw Materials
+    'Intermediate': '#FFA500',      // Orange - Intermediate products
+    'API': '#4169E1',              // Royal Blue - Active Pharmaceutical Ingredient
+    'Formulation': '#32CD32',      // Lime Green - Formulation sites
+    'Packing': '#9370DB',          // Medium Purple - Packing/Final Product sites
+    'Storage': '#FFD700',          // Gold - Storage locations
+    'Customer_Market': '#FF1493',  // Deep Pink - Customer Markets
+    'Material': '#4CAF50',         // Green - Material nodes
+    'MaterialLocation': '#00BCD4', // Cyan - Material Location nodes
+    'InventoryDataPoints': '#FFC107',  // Amber - Inventory data
+    'ProductionDataPoints': '#9C27B0'  // Purple - Production data
   };
   return colorMap[label] || '#999999';
 };

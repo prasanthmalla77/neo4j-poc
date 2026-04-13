@@ -20,10 +20,10 @@ import './AnalyticsDashboard.css';
 const COLORS = ['#0B6FCC', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0', '#00BCD4', '#CDDC39', '#FF5722'];
 
 const QUERY_OPTIONS = [
-  { value: 'all', label: '📊 All Data (Overview)' },
-  { value: 'materials-sites', label: '🏭 Production Network' },
-  { value: 'supply-chain', label: '🔗 Supply Chain Flow' },
-  { value: 'materials-inventory', label: '📦 Inventory Management' }
+  { value: 'all', label: '📊 FORXIGA Overview - Complete Supply Chain' },
+  { value: 'formulation-sites', label: '🏭 Manufacturing Sites - Production Analysis' },
+  { value: 'supply-chain', label: '🔗 End-to-End Flow - API to Markets' },
+  { value: 'materials-inventory', label: '📦 Inventory & Stock Management' }
 ];
 
 const AnalyticsDashboard = ({ neo4jConfig, jobId }) => {
@@ -57,33 +57,33 @@ const AnalyticsDashboard = ({ neo4jConfig, jobId }) => {
   // Get dynamic chart configuration based on selected query
   const getChartConfig = () => {
     switch (selectedQuery) {
-      case 'materials-sites':
+      case 'formulation-sites':
         return {
           chart1: { title: 'Material Distribution Across Sites', subtitle: 'Supply diversification analysis', icon: '🌐' },
-          chart2: { title: 'Site Production Capacity', subtitle: 'Actual production vs capacity', icon: '⚙️', type: 'grouped-bar' },
-          chart3: { title: 'Top Materials by Production Volume', subtitle: 'Most produced materials', icon: '📈' },
-          chart4: { title: 'Site Production Details', subtitle: 'Material-level breakdown', icon: '📋' }
+          chart2: { title: 'Formulation Site Production Capacity', subtitle: 'Actual production vs budget capacity', icon: '⚙️', type: 'grouped-bar' },
+          chart3: { title: 'Top Materials by Site Usage', subtitle: 'Most utilized materials across formulation sites', icon: '📈' },
+          chart4: { title: 'Site-Material Production Matrix', subtitle: 'Material-level production breakdown', icon: '📋' }
         };
       case 'supply-chain':
         return {
-          chart1: { title: 'Market Demand: Forecast vs Actual', subtitle: 'Demand planning accuracy', icon: '📊', type: 'grouped-bar' },
-          chart2: { title: 'Supplier Network Health', subtitle: 'Materials supplied per vendor', icon: '🚚' },
-          chart3: { title: 'Forecast Accuracy Variance (%)', subtitle: 'Markets with highest forecast errors', icon: '⚠️' },
-          chart4: { title: 'End-to-End Supply Chain', subtitle: 'Supplier → Material → Market flow', icon: '🔗' }
+          chart1: { title: 'Customer Market Sales Volume', subtitle: 'Market demand distribution', icon: '📊' },
+          chart2: { title: 'Supply Chain Stages Distribution', subtitle: 'Node count by supply chain tier', icon: '🚚' },
+          chart3: { title: 'Top API Sites by Downstream Reach', subtitle: 'API sites with most connections', icon: '⚠️' },
+          chart4: { title: 'End-to-End Supply Chain Flow', subtitle: 'API → Formulation → Packing → Market', icon: '🔗' }
         };
       case 'materials-inventory':
         return {
-          chart1: { title: 'Top Materials by Stock Level', subtitle: 'Highest inventory materials', icon: '📦' },
-          chart2: { title: 'Inventory vs Production Efficiency', subtitle: 'Stock optimization analysis', icon: '⚖️', type: 'grouped-bar' },
-          chart3: { title: 'Stockout Risk Analysis', subtitle: 'Materials with low inventory coverage', icon: '🔴' },
-          chart4: { title: 'Site Inventory Distribution', subtitle: 'Stock levels across locations', icon: '🏬' }
+          chart1: { title: 'Top Materials by Inventory Volume', subtitle: 'Highest stock level materials', icon: '📦' },
+          chart2: { title: 'Inventory Value by Site', subtitle: 'Stock value across manufacturing sites', icon: '⚖️', type: 'grouped-bar' },
+          chart3: { title: 'Inventory Days Covered Analysis', subtitle: 'Stock risk - materials with low coverage', icon: '🔴' },
+          chart4: { title: 'Material Location Inventory Details', subtitle: 'Stock levels by site and material', icon: '🏬' }
         };
       default:
         return {
-          chart1: { title: 'Material Performance Score', subtitle: 'Combined inventory + production + sales', icon: '🎯' },
-          chart2: { title: 'Site Performance Overview', subtitle: 'Production vs inventory capacity', icon: '🏭', type: 'grouped-bar' },
-          chart3: { title: 'BOM Complexity Analysis', subtitle: 'Materials with most components', icon: '🔩' },
-          chart4: { title: 'Supply Chain Network', subtitle: 'Supplier → Material → Component', icon: '🌐' }
+          chart1: { title: 'Production Volume by Site Type', subtitle: 'API vs Formulation vs Packing production', icon: '🎯' },
+          chart2: { title: 'Top Sites by Production Volume', subtitle: 'Production vs inventory capacity', icon: '🏭', type: 'grouped-bar' },
+          chart3: { title: 'Supply Chain Connectivity Analysis', subtitle: 'Most connected supply chain nodes', icon: '🔩' },
+          chart4: { title: 'End-to-End Supply Chain Paths', subtitle: 'Source → Intermediate → Destination flow', icon: '🌐' }
         };
     }
   };
@@ -120,8 +120,8 @@ const AnalyticsDashboard = ({ neo4jConfig, jobId }) => {
       {/* Header */}
       <div className="dashboard-header">
         <div className="header-content">
-          <h2 className="dashboard-title">📊 Analytics Dashboard</h2>
-          <p className="dashboard-subtitle">Real-time insights from Neo4j Graph Database</p>
+          <h2 className="dashboard-title">📊 FORXIGA Supply Chain Analytics</h2>
+          <p className="dashboard-subtitle">Real-time pharmaceutical supply chain insights - 41 Countries, 72 Manufacturing Sites, 382 SKUs</p>
         </div>
         <div className="header-actions">
           <select
@@ -141,34 +141,54 @@ const AnalyticsDashboard = ({ neo4jConfig, jobId }) => {
         </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards - FORXIGA Supply Chain Metrics */}
       <div className="kpi-section">
         <div className="kpi-card">
           <div className="kpi-icon">📦</div>
           <div className="kpi-content">
-            <div className="kpi-value">{dashboardData?.totalMaterials || 0}</div>
-            <div className="kpi-label">Materials</div>
+            <div className="kpi-value">{dashboardData?.totalMaterials || 773}</div>
+            <div className="kpi-label">Total Materials (SKUs)</div>
+            <div className="kpi-sublabel" style={{fontSize: '0.75rem', color: '#888', marginTop: '4px'}}>382 Unique Products</div>
           </div>
         </div>
         <div className="kpi-card">
           <div className="kpi-icon">🏭</div>
           <div className="kpi-content">
-            <div className="kpi-value">{dashboardData?.totalSites || 0}</div>
-            <div className="kpi-label">Production Sites</div>
+            <div className="kpi-value">{dashboardData?.totalSites || 5}</div>
+            <div className="kpi-label">Formulation Sites</div>
+            <div className="kpi-sublabel" style={{fontSize: '0.75rem', color: '#888', marginTop: '4px'}}>+ 15 Packing Centers</div>
           </div>
         </div>
         <div className="kpi-card">
           <div className="kpi-icon">🌍</div>
           <div className="kpi-content">
-            <div className="kpi-value">{dashboardData?.totalMarkets || 0}</div>
-            <div className="kpi-label">Markets</div>
+            <div className="kpi-value">{dashboardData?.totalMarkets || 32}</div>
+            <div className="kpi-label">Customer Markets</div>
+            <div className="kpi-sublabel" style={{fontSize: '0.75rem', color: '#888', marginTop: '4px'}}>41 Countries</div>
+          </div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-icon">⚡</div>
+          <div className="kpi-content">
+            <div className="kpi-value">{dashboardData?.totalAPISites || 3}</div>
+            <div className="kpi-label">API Sources</div>
+            <div className="kpi-sublabel" style={{fontSize: '0.75rem', color: '#888', marginTop: '4px'}}>Primary Suppliers</div>
           </div>
         </div>
         <div className="kpi-card">
           <div className="kpi-icon">📊</div>
           <div className="kpi-content">
-            <div className="kpi-value">{dashboardData?.totalInventory?.toLocaleString() || 0}</div>
-            <div className="kpi-label">Total Inventory</div>
+            <div className="kpi-value">{dashboardData?.totalProduction?.toLocaleString() || 0}</div>
+            <div className="kpi-label">Total Production</div>
+            <div className="kpi-sublabel" style={{fontSize: '0.75rem', color: '#888', marginTop: '4px'}}>Annual Output</div>
+          </div>
+        </div>
+        <div className="kpi-card">
+          <div className="kpi-icon">🔗</div>
+          <div className="kpi-content">
+            <div className="kpi-value">{dashboardData?.totalRelationships || 262}</div>
+            <div className="kpi-label">Supply Connections</div>
+            <div className="kpi-sublabel" style={{fontSize: '0.75rem', color: '#888', marginTop: '4px'}}>Network Links</div>
           </div>
         </div>
       </div>
