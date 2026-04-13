@@ -4,6 +4,31 @@
   height: calc(100vh - 200px);
   gap: 20px;
   background: #F5F7FA;
+  transition: all 0.3s ease;
+}
+
+.chat-query-container.expanded {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  height: 100vh;
+  gap: 0;
+  background: #F5F7FA;
+  padding: 0;
+  margin: 0;
+}
+
+.chat-query-container.expanded .chat-panel {
+  flex: 1;
+  max-width: 100%;
+  border-radius: 0;
+}
+
+.chat-query-container.expanded .graph-panel {
+  display: none;
 }
 
 /* Left Panel - Chat */
@@ -15,23 +40,45 @@
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  transition: all 0.3s ease;
 }
 
 .chat-header {
   background: linear-gradient(135deg, #0B6FCC 0%, #0A5BA8 100%);
   color: white;
   padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.chat-header h3 {
+.header-left h3 {
   margin: 0 0 4px 0;
   font-size: 20px;
 }
 
-.chat-header p {
+.header-left p {
   margin: 0;
   font-size: 13px;
   opacity: 0.9;
+}
+
+.expand-btn {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.expand-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
 }
 
 /* Sample Questions */

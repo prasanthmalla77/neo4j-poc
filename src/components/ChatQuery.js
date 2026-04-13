@@ -50,6 +50,7 @@ const ChatQuery = () => {
   const [jobData, setJobData] = useState(null);
   const [graphData, setGraphData] = useState(null);
   const [showTyping, setShowTyping] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const messagesEndRef = useRef(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -251,12 +252,21 @@ const ChatQuery = () => {
   };
 
   return (
-    <div className="chat-query-container">
+    <div className={`chat-query-container ${isExpanded ? 'expanded' : ''}`}>
       {/* Left Side - Chat Interface */}
       <div className="chat-panel">
         <div className="chat-header">
-          <h3>💬 AI Graph Query Assistant</h3>
-          <p>Ask questions in natural language</p>
+          <div className="header-left">
+            <h3>💬 AI Graph Query Assistant</h3>
+            <p>Ask questions in natural language</p>
+          </div>
+          <button
+            className="expand-btn"
+            onClick={() => setIsExpanded(!isExpanded)}
+            title={isExpanded ? "Collapse" : "Expand"}
+          >
+            {isExpanded ? '⬅️ Collapse' : '⬆️ Expand'}
+          </button>
         </div>
 
         {/* Sample Questions - Show only when no messages */}
