@@ -204,34 +204,6 @@ const AnalyticsDashboard = () => {
           </div>
         </div>
 
-        {/* Chart 5: Capacity Utilization */}
-        <div className="chart-card">
-          <div className="chart-header">
-            <div>
-              <h3>Capacity Utilization by Site</h3>
-              <p className="chart-subtitle">Which sites are at risk of overload?</p>
-            </div>
-            <span className="chart-icon">⚠️</span>
-          </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={capacityUtilizationData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="site" angle={-15} textAnchor="end" height={80} />
-              <YAxis domain={[0, 100]} />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="utilization" name="Utilization %">
-                {capacityUtilizationData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={getBarColor(entry.utilization)} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          <div className="chart-insight">
-            💡 <strong>Insight:</strong> Clear bottleneck at Mt Vernon/Sweden vs available capacity in Puerto Rico
-          </div>
-        </div>
-
         {/* Chart 6: Manufacturing Stages */}
         <div className="chart-card">
           <div className="chart-header">
