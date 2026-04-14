@@ -11,7 +11,8 @@
       "Bash(powershell -Command \"Get-Content ''d:\\\\zs associates\\\\neo4j_demo\\\\forxiga.json'' | ConvertFrom-Json | Get-Member\")",
       "Bash(node analyze_forxiga.js:*)",
       "Bash(node analyze_metrics.js:*)",
-      "Bash(node analyze_inventory.js:*)"
+      "Bash(node analyze_inventory.js:*)",
+      "Bash(node capacity_analysis.js:*)"
     ]
   }
 }

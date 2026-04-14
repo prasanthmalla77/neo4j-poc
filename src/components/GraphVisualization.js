@@ -1,12 +1,13 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { InteractiveNvlWrapper } from '@neo4j-nvl/react';
 import { mockJobResponse } from '../data/backendMockData';
-import { fetchGraphData, testConnection } from '../services/neo4jService';
+import { fetchGraphData, fetchFilteredGraphData, testConnection } from '../services/neo4jService';
 import { prepareGraphData, highlightSimilarNodes, highlightPath, resetHighlighting } from '../utils/graphHighlighting';
 import { createGdsProjection, runNodeSimilarity, runShortestPath } from '../services/gdsService';
 import { ALGORITHM_TYPES } from '../data/algorithmConfigs';
 import AlgorithmPanel from './AlgorithmPanel';
 import AlgorithmResults from './AlgorithmResults';
+import GraphConfigModal from './GraphConfigModal';
 import './GraphVisualization.css';
 
 // Toggle between mock and real Neo4j data
@@ -17,12 +18,16 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
 
   // State management
   const [jobData, setJobData] = useState(null);
-  const [graphData, setGraphData] = useState({ nodes: [], relationships: [] });
+  const [fullGraphData, setFullGraphData] = useState({ nodes: [], relationships: [] }); // Original full data
+  const [graphData, setGraphData] = useState({ nodes: [], relationships: [] }); // Filtered data for display
   const [gdsProjection, setGdsProjection] = useState(null);
   const [selectedItem, setSelectedItem] = useState(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [algorithmResults, setAlgorithmResults] = useState(null);
   const [error, setError] = useState(null);
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [graphConfig, setGraphConfig] = useState({ nodeLabels: [], relationshipTypes: [] });
+  const [isLoadingConfig, setIsLoadingConfig] = useState(false);
 
   // Handle external data from chat query
   useEffect(() => {
@@ -31,6 +36,7 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
       setJobData(externalJobData);
       const preparedData = prepareGraphData(externalJobData);
       console.log('[GraphViz] Prepared data:', preparedData);
+      setFullGraphData(preparedData);
       setGraphData(preparedData);
 
       // Create GDS projection for external data
@@ -77,6 +83,7 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
 
         // Prepare graph data for visualization
         const preparedData = prepareGraphData(job);
+        setFullGraphData(preparedData);
         setGraphData(preparedData);
 
         // Create GDS projection
@@ -142,6 +149,53 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
     },
     onZoom: (zoomLevel) => {
       console.log('Zoom level:', zoomLevel);
+    }
+  };
+
+  // Handle graph configuration
+  const handleApplyConfig = async (config) => {
+    console.log('[GraphViz] Applying config:', config);
+    setGraphConfig(config);
+
+    // If no node labels selected, show nothing
+    if (config.nodeLabels.length === 0) {
+      setGraphData({ nodes: [], relationships: [] });
+      console.log('[GraphViz] No node labels selected, showing empty graph');
+      return;
+    }
+
+    try {
+      setIsLoadingConfig(true);
+      setError(null);
+      console.log('[GraphViz] Fetching filtered data from Neo4j...');
+
+      // Fetch filtered data from Neo4j
+      const filteredJob = await fetchFilteredGraphData(
+        jobData?.jobId || 'neo4j_job_001',
+        config.nodeLabels,
+        config.relationshipTypes
+      );
+
+      console.log('[GraphViz] Fetched filtered data:', filteredJob);
+
+      // Prepare and set graph data
+      const preparedData = prepareGraphData(filteredJob);
+      setGraphData(preparedData);
+
+      // Update GDS projection with filtered data
+      const projection = await createGdsProjection(
+        filteredJob.jobId,
+        filteredJob.nodes,
+        filteredJob.relationships
+      );
+      setGdsProjection(projection);
+
+      console.log(`[GraphViz] Applied config: ${filteredJob.nodes.length} nodes, ${filteredJob.relationships.length} relationships`);
+    } catch (err) {
+      console.error('[GraphViz] Failed to apply configuration:', err);
+      setError('Failed to load filtered graph data: ' + err.message);
+    } finally {
+      setIsLoadingConfig(false);
     }
   };
 
@@ -301,6 +355,74 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
             </span>
           </div>
         </div>
+
+        {/* Configuration Tip and Button */}
+        <div style={{
+          marginTop: '12px',
+          padding: '10px 16px',
+          background: '#E3F2FD',
+          border: '1px solid #2196F3',
+          borderRadius: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          fontSize: '13px',
+          color: '#1976D2'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+            <span style={{ fontSize: '16px' }}>💡</span>
+            <span>
+              <strong>Tip:</strong> You can configure the graph by selecting specific nodes and relationships to load only the data you need.
+            </span>
+          </div>
+          <button
+            onClick={() => setIsConfigModalOpen(true)}
+            style={{
+              padding: '8px 16px',
+              background: '#1976D2',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              fontWeight: '600',
+              whiteSpace: 'nowrap',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => e.target.style.background = '#1565C0'}
+            onMouseLeave={(e) => e.target.style.background = '#1976D2'}
+          >
+            ⚙️ Configure Graph
+          </button>
+        </div>
+
+        {/* Loading Configuration Indicator */}
+        {isLoadingConfig && (
+          <div style={{
+            marginTop: '12px',
+            padding: '12px 16px',
+            background: '#FFF3E0',
+            border: '1px solid #FF9800',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            fontSize: '14px',
+            color: '#E65100'
+          }}>
+            <div className="spinner" style={{
+              width: '20px',
+              height: '20px',
+              border: '3px solid #FFE0B2',
+              borderTop: '3px solid #FF9800',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }}></div>
+            <span>Loading filtered graph data from Neo4j...</span>
+          </div>
+        )}
+
         {error && (
           <div className="error-banner">
             {error}
@@ -356,7 +478,21 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
         <div className="algorithm-container">
           <AlgorithmPanel
             availableAlgorithms={jobData.availableAlgorithms}
-            graphData={jobData}
+            graphData={{
+              ...jobData,
+              nodes: graphData.nodes.map(node => ({
+                id: node.id,
+                labels: node.labels,
+                properties: node.properties
+              })),
+              relationships: graphData.relationships.map(rel => ({
+                id: rel.id,
+                type: rel.type,
+                startNode: rel.from,
+                endNode: rel.to,
+                properties: rel.properties
+              }))
+            }}
             onExecute={handleAlgorithmExecute}
             isExecuting={isExecuting}
           />
@@ -437,6 +573,15 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
           </div>
         </div>
       )}
+
+      {/* Graph Configuration Modal */}
+      <GraphConfigModal
+        isOpen={isConfigModalOpen}
+        onClose={() => setIsConfigModalOpen(false)}
+        allNodes={fullGraphData.nodes}
+        allRelationships={fullGraphData.relationships}
+        onApplyConfig={handleApplyConfig}
+      />
     </div>
   );
 };

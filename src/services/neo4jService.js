@@ -54,6 +54,129 @@ export const testConnection = async () => {
 };
 
 /**
+ * Fetch filtered graph data from Neo4j with specific node labels and relationship types
+ * @param {String} jobId - Job identifier
+ * @param {Array<String>} nodeLabels - Array of node labels to fetch (e.g., ['Drug', 'Country'])
+ * @param {Array<String>} relationshipTypes - Array of relationship types to fetch (e.g., ['APPROVED_IN'])
+ * @returns {Promise<Object>} Filtered job data
+ */
+export const fetchFilteredGraphData = async (jobId = 'neo4j_job_001', nodeLabels = [], relationshipTypes = []) => {
+  const driver = initDriver();
+  const session = driver.session({ database: NEO4J_CONFIG.database });
+
+  try {
+    let nodesResult, relsResult;
+
+    if (nodeLabels.length === 0) {
+      // If no labels specified, fetch all nodes
+      nodesResult = await session.run(`
+        MATCH (n)
+        RETURN
+          id(n) as id,
+          labels(n) as labels,
+          properties(n) as properties
+      `);
+    } else {
+      // Build WHERE clause for multiple labels using OR
+      const labelConditions = nodeLabels.map((label, idx) => `'${label}' IN labels(n)`).join(' OR ');
+
+      nodesResult = await session.run(`
+        MATCH (n)
+        WHERE ${labelConditions}
+        RETURN
+          id(n) as id,
+          labels(n) as labels,
+          properties(n) as properties
+      `);
+    }
+
+    if (relationshipTypes.length === 0) {
+      // If no types specified, fetch all relationships
+      relsResult = await session.run(`
+        MATCH (start)-[r]->(end)
+        RETURN
+          id(r) as id,
+          type(r) as type,
+          id(start) as startNode,
+          id(end) as endNode,
+          properties(r) as properties
+      `);
+    } else {
+      // Build WHERE clause for multiple relationship types
+      const typeConditions = relationshipTypes.map(type => `type(r) = '${type}'`).join(' OR ');
+
+      relsResult = await session.run(`
+        MATCH (start)-[r]->(end)
+        WHERE ${typeConditions}
+        RETURN
+          id(r) as id,
+          type(r) as type,
+          id(start) as startNode,
+          id(end) as endNode,
+          properties(r) as properties
+      `);
+    }
+
+    // Transform nodes
+    const nodes = nodesResult.records.map(record => ({
+      id: record.get('id').toString(),
+      labels: record.get('labels'),
+      properties: record.get('properties')
+    }));
+
+    // Transform relationships
+    const relationships = relsResult.records.map(record => ({
+      id: record.get('id').toString(),
+      type: record.get('type'),
+      startNode: record.get('startNode').toString(),
+      endNode: record.get('endNode').toString(),
+      properties: record.get('properties')
+    }));
+
+    // Filter relationships to only include those connecting filtered nodes
+    const nodeIds = new Set(nodes.map(n => n.id));
+    const filteredRelationships = relationships.filter(rel =>
+      nodeIds.has(rel.startNode) && nodeIds.has(rel.endNode)
+    );
+
+    // Get available algorithms
+    const availableAlgorithms = [
+      {
+        id: 'nodeSimilarity',
+        name: 'Node Similarity',
+        description: 'Find similar nodes based on their neighborhoods',
+        category: 'similarity',
+        tier: 'beta'
+      },
+      {
+        id: 'shortestPath',
+        name: 'Shortest Path',
+        description: 'Find shortest path between two nodes',
+        category: 'path-finding',
+        tier: 'production'
+      }
+    ];
+
+    await session.close();
+
+    console.log(`[Neo4j Service] Fetched ${nodes.length} nodes and ${filteredRelationships.length} relationships (filtered)`);
+
+    return {
+      jobId,
+      createdAt: new Date().toISOString(),
+      status: 'ready',
+      nodes,
+      relationships: filteredRelationships,
+      availableAlgorithms
+    };
+  } catch (error) {
+    console.error('[Neo4j Service] Error fetching filtered graph data:', error);
+    await session.close();
+    throw error;
+  }
+};
+
+/**
  * Fetch job data from Neo4j (nodes and relationships)
  * @param {String} jobId - Job identifier (optional, for filtering)
  * @returns {Promise<Object>} Job data with nodes and relationships
