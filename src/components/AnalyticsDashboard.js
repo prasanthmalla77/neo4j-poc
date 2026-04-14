@@ -52,15 +52,6 @@ const AnalyticsDashboard = () => {
     { location: 'China Pharma', materials: 35, risk: 'Low' }
   ];
 
-  // Chart 5: Capacity Utilization (Bar Chart)
-  const capacityUtilizationData = [
-    { site: 'Mt Vernon', utilization: 90, status: 'Critical' },
-    { site: 'SE Snäckviken', utilization: 85, status: 'High' },
-    { site: 'UK Macclesfield', utilization: 75, status: 'Good' },
-    { site: 'Japan KK', utilization: 70, status: 'Good' },
-    { site: 'Puerto Rico', utilization: 45, status: 'Available' }
-  ];
-
   // Chart 6: Manufacturing Stages (Pie Chart)
   const manufacturingStagesData = [
     { name: 'FP@PS (Packing)', value: 23, count: 176 },
