@@ -61,11 +61,11 @@ const ChatQuery = () => {
   // Hardcoded questions from chatService.js - User can ONLY click these
   const sampleQuestions = [
     // === OPERATIONAL QUESTIONS ===
-    {
-      text: "which forxiga manufacturing and packing sites are operating above 80% capacity",
-      icon: "🏭",
-      description: "High-Capacity Sites (>80%)"
-    },
+    // {
+    //   text: "which forxiga manufacturing and packing sites are operating above 80% capacity",
+    //   icon: "🏭",
+    //   description: "High-Capacity Sites (>80%)"
+    // },
     {
       text: "which forxiga supply chain nodes are located in india and how many materials do they handle",
       icon: "🇮🇳",
