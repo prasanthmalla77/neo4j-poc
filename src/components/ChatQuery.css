@@ -300,6 +300,7 @@
   flex-direction: column;
   gap: 20px;
   overflow-y: auto;
+  min-width: 0;
 }
 
 .empty-state {
@@ -482,4 +483,155 @@
   .nvl-container {
     height: 400px;
   }
+}
+
+/* Graph + Dashboard wrapper */
+.graph-and-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+/* Fixed-height wrapper for graph so dashboard sits below */
+.chat-graph-wrapper {
+  flex-shrink: 0;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+/* Query Results Dashboard */
+.query-dashboard {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.qd-header {
+  background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+  color: white;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 12px 20px;
+  letter-spacing: 0.3px;
+}
+
+/* KPI row */
+.qd-kpi-row {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #E8EAF6;
+}
+
+.qd-kpi {
+  flex: 1;
+  padding: 14px 12px;
+  text-align: center;
+  border-right: 1px solid #E8EAF6;
+}
+
+.qd-kpi:last-child {
+  border-right: none;
+}
+
+.qd-kpi-value {
+  font-size: 26px;
+  font-weight: 800;
+  color: #1a237e;
+  line-height: 1.1;
+}
+
+.qd-kpi-label {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Charts row */
+.qd-chart-body {
+  padding: 16px 20px 8px;
+}
+
+.qd-chart-card {
+  flex: 1;
+  padding: 16px;
+}
+
+.qd-chart-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+/* Node table */
+.qd-table-section {
+  padding: 16px;
+}
+
+.qd-table-wrap {
+  overflow-x: auto;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #E8EAF6;
+  border-radius: 6px;
+}
+
+.qd-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.qd-table thead th {
+  background: #F5F5F5;
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 700;
+  color: #555;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.qd-table tbody tr:hover {
+  background: #F9FBFD;
+}
+
+.qd-table td {
+  padding: 7px 12px;
+  border-top: 1px solid #F0F0F0;
+  color: #333;
+}
+
+.qd-td-id {
+  font-family: monospace;
+  font-size: 11px;
+  color: #666;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qd-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  white-space: nowrap;
 }

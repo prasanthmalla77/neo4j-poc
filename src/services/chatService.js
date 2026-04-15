@@ -148,6 +148,99 @@ LIMIT 200`,
     dashboardType: 'supply-chain'
   },
 
+  'which tagrisso api suppliers feed into the snackviken formulation site': {
+    query: `MATCH (api:API {brand: 'tagrisso'})-[r:SUPPLIES_TO {brand: 'tagrisso'}]->(form:Formulation {brand: 'tagrisso'})
+WHERE form.site_name CONTAINS 'Snäckviken'
+RETURN api, r, form`,
+    description: 'Fetching Tagrisso API suppliers feeding into SE: Snäckviken / Gärtuna formulation site',
+    dashboardType: 'supply-chain'
+  },
+
+  'which forxiga formulation sites are dependent on a single api supplier': {
+    query: `MATCH (api:API {brand: 'forxiga'})-[r:SUPPLIES_TO {brand: 'forxiga'}]->(form:Formulation {brand: 'forxiga'})
+WITH form, collect(DISTINCT api) AS apiSuppliers
+WHERE size(apiSuppliers) = 1
+UNWIND apiSuppliers AS api
+MATCH (api)-[r2:SUPPLIES_TO {brand: 'forxiga'}]->(form)
+RETURN api, r2, form`,
+    description: 'Fetching Forxiga formulation sites that receive API from only one supplier',
+    dashboardType: 'supply-chain'
+  },
+
+  'which tagrisso nodes are external vendor sites and what countries are they in': {
+    query: `MATCH (n {brand: 'tagrisso'})
+WHERE n.site_type = 'ExternalESMSite' OR n.site_type = 'ExternalCMSite'
+RETURN n`,
+    description: 'Fetching all Tagrisso nodes flagged as ExternalESMSite or ExternalCMSite with their country data',
+    dashboardType: 'supply-chain'
+  },
+
+  'show forxiga nodes where api inventory projected value is greater than 1 million': {
+    query: `MATCH (site {brand: 'forxiga'})-[r:HAS_INVENTORY_DATA]->(inv:InventoryDataPoints {brand: 'forxiga'})
+WHERE inv.inventory_projected_value_API > 1000000
+RETURN site, r, inv
+ORDER BY inv.inventory_projected_value_API DESC`,
+    description: 'Fetching Forxiga supply chain nodes whose projected API inventory value exceeds $1M',
+    dashboardType: 'supply-chain'
+  },
+
+  'which tagrisso packing sites have the highest production total year': {
+    query: `MATCH (n:Packing {brand: 'tagrisso'})-[r:HAS_PRODUCTION_DATA]->(pd:ProductionDataPoints {brand: 'tagrisso'})
+WHERE pd.production_total_year > 0
+RETURN n, r, pd
+ORDER BY pd.production_total_year DESC`,
+    description: 'Fetching Tagrisso packing sites ranked by annual production volume',
+    dashboardType: 'supply-chain'
+  },
+
+  'list all forxiga supply chain sites located in china': {
+    query: `MATCH (n {brand: 'forxiga'})
+WHERE n.site_country_name = 'China' OR n.vendor_country_name = 'China'
+RETURN n
+ORDER BY n.stage_of_manufacture, n.site_name`,
+    description: 'Fetching all Forxiga supply chain nodes located in China',
+    dashboardType: 'supply-chain'
+  },
+
+  'which countries have both a formulation and a packing site for tagrisso': {
+    query: `MATCH (form:Formulation {brand: 'tagrisso'}), (pack:Packing {brand: 'tagrisso'})
+WHERE form.site_country_name = pack.site_country_name
+  AND form.site_country_name <> ''
+RETURN DISTINCT form, pack`,
+    description: 'Fetching Tagrisso countries that have both formulation and packing nodes',
+    dashboardType: 'supply-chain'
+  },
+
+  'are there any sites that appear in both forxiga and tagrisso supply chains': {
+    query: `MATCH (f {brand: 'forxiga'}), (t {brand: 'tagrisso'})
+WHERE f.site_name = t.site_name
+  AND f.site_name IS NOT NULL AND f.site_name <> ''
+  AND labels(f)[0] = labels(t)[0]
+RETURN DISTINCT f, t
+ORDER BY f.site_name`,
+    description: 'Fetching all AstraZeneca sites shared across both Forxiga and Tagrisso supply chains',
+    dashboardType: 'supply-chain'
+  },
+
+  'show all customer markets supplied by forxiga packing sites': {
+    query: `MATCH (pack:Packing {brand: 'forxiga'})-[*1..3]->(market:Customer_Market)
+WHERE market.brand = 'forxiga'
+RETURN DISTINCT pack, market
+ORDER BY market.id`,
+    description: 'Fetching all customer markets reachable from Forxiga packing sites',
+    dashboardType: 'supply-chain'
+  },
+
+  'which forxiga formulation sites supply to more than 5 downstream nodes': {
+    query: `MATCH (form:Formulation {brand: 'forxiga'})-[r:SUPPLIES_TO {brand: 'forxiga'}]->(downstream)
+WITH form, count(DISTINCT downstream) AS downstreamCount
+WHERE downstreamCount > 5
+MATCH (form)-[r2:SUPPLIES_TO {brand: 'forxiga'}]->(ds)
+RETURN form, r2, ds`,
+    description: 'Fetching Forxiga formulation sites with more than 5 direct downstream connections',
+    dashboardType: 'supply-chain'
+  },
+
   // === SPECIFIC OPERATIONAL QUESTIONS ===
 
   'which forxiga manufacturing and packing sites are operating above 80% capacity': {
@@ -252,6 +345,207 @@ const generateNLPAnswer = (userQuestion, graphData) => {
   const normalizedQ = userQuestion.toLowerCase();
 
   // === OPERATIONAL QUESTIONS ===
+
+  // Q4: Tagrisso external vendor sites and countries
+  if (normalizedQ.includes('tagrisso') && normalizedQ.includes('external vendor')) {
+    return `## 🌍 Tagrisso External Vendor Sites by Country
+
+The Tagrisso supply chain has external vendor and ESM (External Supply Management) nodes spanning **2 identified countries**:
+
+### 🇨🇭 Switzerland — 4 nodes (API & Storage)
+- **Lonza LTD (Basel)** — API site (SCHC / GES CM: SE Switzerland). Supplies Osimertinib Mesylate to FORM_SE01 and FORM_1448. This is the sole API supplier for the Snäckviken formulation site.
+- **DOTTIKON EXCLUSIVE SYNTHESIS AG** — API site (SCHC / GES CM: SE Switzerland). Supplies to FORM_1448.
+- **LONZA LTD** — Storage node (GES CM: SE Sweden, vendor from Switzerland). Feeds into FORM_SE01.
+- **DOTTIKON EXCLUSIVE SYNTHESIS AG** — Storage node (GES CM: SE Sweden, vendor from Switzerland). Feeds into FORM_SE01 and FORM_1448.
+
+### 🇯🇵 Japan — 2 nodes (Distribution Hubs)
+- **West Distribution Center** (JP11) — serves the Japan customer market.
+- **East Distribution Center** (JP12) — also serves the Japan customer market.
+
+> Additionally, there are RSM and Intermediate mock nodes flagged as ExternalESMSite but without country metadata in the graph. The two main external **API vendors** for Tagrisso are **Lonza** and **Dottikon**, both based in Switzerland.`;
+  }
+
+  // Q11: Forxiga formulation sites with >5 downstream connections
+  if (normalizedQ.includes('formulation') && normalizedQ.includes('5 downstream')) {
+    const formNodes = graphData?.nodes?.filter(n => n.labels?.[0] === 'Formulation') || [];
+    const connCounts = {};
+    formNodes.forEach(n => {
+      const name = n.properties?.site_name || n.properties?.id;
+      if (name) connCounts[name] = (connCounts[name] || 0) + 1;
+    });
+    const siteLines = Object.entries(connCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => `- **${name}** — ${count} downstream packing site(s)`);
+    return `## 🔗 Forxiga Formulation Sites with High Downstream Connectivity (>5 nodes)
+
+${siteLines.join('\n') || 'No formulation sites with >5 downstream connections found in current graph data.'}
+
+> Sites with many downstream connections represent **supply chain hubs** — disruption at these sites would affect the most markets.`;
+  }
+
+  // Q10: Customer markets supplied by Forxiga packing sites
+  if (normalizedQ.includes('customer markets') || (normalizedQ.includes('customer') && normalizedQ.includes('forxiga') && normalizedQ.includes('packing'))) {
+    return `## 🏪 Forxiga Customer Markets — Supplied by Packing Sites
+
+Forxiga packing sites supply **13 distinct customer markets** globally, served by **12 packing sites** across 8 countries:
+
+| Customer Market | Market Label | Primary Packing Site(s) |
+|----------------|-------------|-------------------------|
+| **ASIAPAC** | TW, AU, VN & 14 other countries | CN20 (China), SE01 (Sweden), UK05 (UK), IN11 (India), IN10 (India) |
+| **EUROPE** | FR, DE, ES & 32 other countries | SE01 (Sweden), UK05 (UK), SE16 (Sweden) |
+| **MEA** | TR, EG, MA & 26 other countries | SE01 (Sweden), UK05 (UK), EG11 (Egypt) |
+| **EURASIA** | UA, GE, KZ & 3 other countries | SE01 (Sweden), UK05 (UK) |
+| **ASIA** | Myanmar | SE01 (Sweden), UK05 (UK) |
+| **China (CN)** | China | CN20 (China), CN40 (China) |
+| **Brazil (BR)** | Brazil | FP_1448 (USA), FP_1402 (USA), FP_CE01 (Brazil) |
+| **USA (US)** | USA | FP_1448 (USA), FP_1402 (USA) |
+| **LATAM** | CO, PA, CL & 3 other countries | FP_1448 (USA) |
+| **Canada (CA)** | Canada | FP_1448 (USA) |
+| **Mexico (MX)** | Mexico | FP_1448 (USA), FP_1000 (Mexico) |
+| **Russia (RU)** | Russian Federation | FP_RU03 (Russia) |
+| **Japan (JP)** | Japan | FP_JP10 (Japan) |
+
+> **UK:Macclesfield Works** and **SE: Snäckviken / Gärtuna** are the two most globally connected packing sites, each covering 5+ market regions. **Mt Vernon (FP_1448, USA)** is the broadest single Americas hub, serving US, Brazil, Canada, Mexico, and LATAM.`;
+  }
+
+  // Q9: Shared sites across Forxiga and Tagrisso
+  if (normalizedQ.includes('both forxiga and tagrisso') || (normalizedQ.includes('appear in both') && normalizedQ.includes('supply'))) {
+    return `## 🔄 Sites Shared Across Both Forxiga and Tagrisso Supply Chains
+
+The graph shows **~61 distinct sites** appear in both the Forxiga and Tagrisso supply chains. Each node exists twice in the database (once per brand) with identical site codes.
+
+### Key Shared Manufacturing Sites
+| Site | Code | Stage | Country |
+|------|------|-------|---------|
+| **SE: Snäckviken / Gärtuna** | SE01 | Formulation + Packing | Sweden |
+| **Mt Vernon** | 1448 | Formulation | USA |
+| **AstraZeneca Industries LLC** | RU03 | Formulation + Packing | Russia |
+| **AstraZeneca K.K.** | JP10 | Packing | Japan |
+| **AstraZeneca Pharma Co., Ltd.** | CN20 | Packing | China |
+| **Newark PLP** | 1402 | Packing | USA |
+| **SE: EMEA Sweden** | SE16 | Packing | Sweden |
+| **EMEA Russia supplies** | SE20 | API | Sweden |
+
+### Shared Distribution Network
+**~50 Distribution Hub sites** are shared across both brands, spanning:
+- 🇮🇳 India: 12 city-level hubs (Mumbai, Delhi, Chennai, Bangalore, Hyderabad, Ahmedabad, Chandigarh, Kolkata, Guwahati, Kochi, Indore + ISMO)
+- 🇨🇦 Canada: 4 hubs (Accuristix + 3 CPDN locations)
+- 🇪🇺 Europe: ~15 hubs (Germany, France, Belgium, Austria, Italy, Spain, Portugal, Switzerland, Poland, Czech, Bulgaria, Greece, Hungary, Netherlands + Sweden)
+- 🌏 APAC: ~10 hubs (Australia, NZ, Singapore, Hong Kong, Malaysia, Thailand, Indonesia, Philippines, Japan)
+- Other: Russia, Brazil, Mexico, Argentina, Colombia, Chile, Panama, South Africa
+
+> The shared distribution infrastructure means AstraZeneca uses the **same logistics network** for both oncology (Tagrisso) and diabetes (Forxiga) products globally.`;
+  }
+
+  // Q8: Countries with both Formulation and Packing for Tagrisso
+  if (normalizedQ.includes('countries') && normalizedQ.includes('formulation') && normalizedQ.includes('packing')) {
+    return `## 🌍 Tagrisso Countries with Both Formulation & Packing Sites
+
+**3 countries** in the Tagrisso network host both a formulation and a packing site:
+
+### 🇷🇺 Russian Federation
+- **Formulation:** AstraZeneca Industries LLC (RU03)
+- **Packing:** AstraZeneca Industries LLC (RU03) — same site serves both stages
+
+### 🇸🇪 Sweden
+- **Formulation:** SE: Snäckviken / Gärtuna (SE01) — the primary global formulation hub
+- **Packing (3 sites):** SE: Snäckviken / Gärtuna (SE01) · EMEA Russia supplies (SE20) · SE: EMEA Sweden
+- Sweden has the most co-located formulation+packing capacity of any country in the Tagrisso network
+
+### 🇺🇸 United States
+- **Formulation:** Mt Vernon (1448) — the primary US formulation site
+- **Packing:** Newark PLP (1402) — dedicated US packing, serves the US customer market
+
+> Countries like Japan and China have packing sites but **no formulation** capacity for Tagrisso, making them dependent on finished formulated bulk from Sweden or the US.`;
+  }
+
+  // Q7: Forxiga supply chain sites in China
+  if (normalizedQ.includes('forxiga') && normalizedQ.includes('china')) {
+    return `## 🇨🇳 Forxiga Supply Chain Sites Located in China
+
+The Forxiga network has **4 nodes** in China, spanning 3 manufacturing stages:
+
+### Formulation
+- **AstraZeneca China Taizhou** (FORM_CN40) — Taizhou, China
+  - The only Forxiga formulation site in China. Also serves as the local packing site.
+  - Sole API supplier: SK biotek Ireland Limited
+  - Downstream: FP_CN40 (local packing) and FP_UK05
+
+### Packing
+- **AstraZeneca China Taizhou** (FP_CN40) — dual-role site (formulation + packing)
+  - Connects to: China customer market and CN10 distribution hub
+- **AstraZeneca Pharma Co., Ltd.** (FP_CN20) — a separate packing-only site
+  - The largest Tagrisso packing site by volume, also present in Forxiga network
+  - Serves multiple APAC markets: Australia, India, Singapore, Hong Kong, Philippines, Indonesia, Malaysia, New Zealand, Thailand
+
+### Distribution
+- **AstraZeneca China Imported FG** (CN10) — distribution hub
+  - Receives packed goods from FP_CN40 and FP_CN20
+  - Delivers to the **China Customer Market**
+
+> China is both a manufacturing and distribution hub for Forxiga. The Taizhou site handles the full formulation-to-packing cycle locally.`;
+  }
+
+  // Q6: Tagrisso packing sites by production total year
+  if (normalizedQ.includes('tagrisso') && normalizedQ.includes('packing') && normalizedQ.includes('production')) {
+    return `## 🏭 Tagrisso Packing Sites — Ranked by Annual Production Volume
+
+The graph shows **4 Tagrisso packing sites** with production data, ranked by production_total_year:
+
+| Rank | Site | Country | Production Total (Year) | Budget | Actual YTD |
+|------|------|---------|------------------------|--------|------------|
+| 1 | **AstraZeneca Pharma Co., Ltd.** (CN20) | China | **60,178,500** | 62,370,000 | 8,199,300 |
+| 2 | **SE: Snäckviken / Gärtuna** (SE01) | Sweden | **29,762,129** | 28,598,764 | 4,457,349 |
+| 3 | **Newark PLP** (1402) | USA | **8,321,090** | 10,759,920 | 411,720 |
+| 4 | **AstraZeneca K.K.** (JP10) | Japan | **6,449,660** | 8,439,816 | 1,549,464 |
+
+**Key observations:**
+- **CN20 (China)** is the highest-volume packing site, running at ~96% of budget — the dominant packing hub for Tagrisso globally
+- **SE01 (Sweden)** slightly exceeds its budget (104%), the most connected packing site with 53 downstream nodes across all major markets
+- **Newark PLP (USA)** is operating significantly below budget (77%) — only serves the US market via 3 distribution hubs
+- **JP10 (Japan)** also below budget (76%) — dedicated to the Japan market via West/East distribution centers`;
+  }
+
+  // Q5: Forxiga nodes with API inventory projected value > $1M
+  if (normalizedQ.includes('inventory') && normalizedQ.includes('1 million')) {
+    return `## 💰 Forxiga Nodes with API Inventory Projected Value > $1M
+
+**9 nodes** across the Forxiga supply chain hold projected API inventory exceeding $1 million, ranked highest to lowest:
+
+1. **GES CM: SE UK** — DOTTIKON EXCLUSIVE SYNTHESIS AG (API, Switzerland) — **$70.0M** projected | 21,489 kg volume
+2. **GES CM: SE Sweden** — SK biotek Ireland Limited (API, Ireland) — **$42.5M** projected | 13,088 kg | 11.7 days covered
+3. **SE: Snäckviken / Gärtuna** (FORM_SE01, Sweden) — **$37.0M** projected API | actual on-hand: $34.2M | 136.5 days covered
+4. **AstraZeneca Industries LLC** (FORM_RU03, Russia) — **$18.9M** projected | 15.6 days covered
+5. **Mt Vernon** (FORM_1448, USA) — **$18.4M** projected | actual on-hand: $27.1M | 128.6 days covered
+6. **AstraZeneca China Taizhou** (FORM_CN40, China) — **$9.2M** projected | actual on-hand: $5.3M | 35.2 days covered
+7. **GES CM: SE Sweden — Storage** (STORAGE_Dottikon, Switzerland) — **$6.8M** projected | actual on-hand: $11.1M | 131.3 days covered
+8. **Canovanas Plant** (FORM_KA01, Puerto Rico) — **$3.1M** projected | actual on-hand: $12.1M | 137.1 days covered
+9. **EMEA Russia supplies** (API_SE20, Sweden) — **$1.7M** projected | design days: 19
+
+> The two external API vendors — **Dottikon** and **SK biotek** — together account for over **$112M** in combined projected API inventory, representing the largest monetary exposure point in the entire Forxiga supply chain.`;
+  }
+
+  // Q3: Forxiga formulation sites with single API supplier
+  if (normalizedQ.includes('forxiga') && normalizedQ.includes('single api supplier')) {
+    return `## ⚠️ Forxiga Formulation Sites Dependent on a Single API Supplier
+
+**1 formulation site** has only one direct API supplier in the graph:
+
+- **AstraZeneca China Taizhou** (FORM_CN40) — China
+  - Sole API supplier: **SK biotek Ireland Limited** (vendor from Ireland, managed via GES CM: SE Sweden)
+  - This formulation site connects downstream to FP_CN40 and FP_UK05
+
+All other Forxiga formulation sites have more than one API supplier and were not returned by this query.`;
+  }
+
+  // Q2: Tagrisso API suppliers → SE Snäckviken
+  if (normalizedQ.includes('tagrisso') && normalizedQ.includes('snackviken')) {
+    return `## 🧪 Tagrisso API Suppliers → SE: Snäckviken / Gärtuna
+
+The Snäckviken / Gärtuna formulation site (FORM_SE01) in Sweden has **only one direct API supplier** — **Lonza LTD (Basel)**, based in Switzerland. This means the entire API input for this formulation site flows from a single external vendor in Switzerland.
+
+The formulation site itself is an AstraZeneca-owned site (AZSite) and once it finishes processing, it supplies forward to multiple packing sites including FP_JP10, FP_CN20, FP_SE01, FP_1402 and others.`;
+  }
 
   // Q1: High Capacity Sites (80%+)
   if (normalizedQ.includes('operating above') || (normalizedQ.includes('capacity') && normalizedQ.includes('80'))) {
@@ -803,7 +1097,8 @@ export const processChatQuery = async (userQuestion) => {
 
   // Default query if no match found
   if (!queryInfo) {
-    queryInfo = HARDCODED_QUERIES['show me all materials and their sites'];
+    // Fall back to the first available query rather than a hard-coded key that may not exist
+    queryInfo = Object.values(HARDCODED_QUERIES)[0];
   }
 
   // Execute the query and get graph data

@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import {
+  PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid
+} from 'recharts';
 import GraphVisualization from './GraphVisualization';
 import { processChatQuery } from '../services/chatService';
 import './ChatQuery.css';
@@ -43,6 +47,210 @@ const AnimatedText = ({ text, speed = 30 }) => {
   );
 };
 
+// Question-aware business dashboard
+const LABEL_COLORS = {
+  API: '#4A90D9',
+  Formulation: '#7B68EE',
+  Packing: '#F5A623',
+  Storage: '#50C878',
+  Customer_Market: '#E74C3C',
+  Intermediate: '#9B59B6',
+  RSM: '#1ABC9C',
+  RM: '#E67E22',
+  Unknown: '#95A5A6',
+};
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 6, padding: '8px 12px', fontSize: 13 }}>
+      <strong>{label || payload[0].payload?.name}</strong>: {payload[0].value}
+    </div>
+  );
+};
+
+const buildChartConfig = (question, nodes, relationships = []) => {
+  const q = question.toLowerCase();
+
+  // Q: single API supplier / dependent → show formulation sites and their sole supplier
+  if (q.includes('single api') || (q.includes('dependent') && q.includes('supplier'))) {
+    const formSites = nodes
+      .filter(n => n.labels?.[0] === 'Formulation')
+      .map(n => ({ name: n.properties?.site_name || n.properties?.id || '—', value: 1, country: n.properties?.site_country_name || '' }));
+    return { title: 'Single-Source Formulation Sites (API Dependency Risk)', dataKey: 'value', labelKey: 'name', data: formSites, type: 'bar', color: '#E74C3C', xLabel: 'Site', yLabel: 'Single Supplier' };
+  }
+
+  // Q: suppliers / vendor / api feeding into a site → show vendor names as bars
+  if (q.includes('supplier') || q.includes('feed into') || (q.includes('api') && q.includes('supplier'))) {
+    const data = nodes
+      .filter(n => n.properties?.vendor_name)
+      .map(n => ({
+        name: n.properties.vendor_name,
+        country: n.properties.vendor_country_name || '—',
+        type: n.labels?.[0] || '—',
+      }));
+    // De-duplicate by vendor_name
+    const seen = new Set();
+    const unique = data.filter(d => { if (seen.has(d.name)) return false; seen.add(d.name); return true; });
+    const chartData = unique.map(d => ({ name: d.name, value: 1, country: d.country }));
+    return { title: 'API Vendors Supplying this Site', dataKey: 'value', labelKey: 'name', data: chartData, type: 'bar', color: '#4A90D9', xLabel: 'Vendor', yLabel: 'Connections' };
+  }
+
+  // Q: production / highest production → bar of site_name vs production_total_year
+  if (q.includes('production')) {
+    const nodeById = {};
+    nodes.forEach(n => { nodeById[n.id] = n; });
+    const prodEdges = relationships.filter(r => r.type === 'HAS_PRODUCTION_DATA');
+    let data = [];
+    if (prodEdges.length > 0) {
+      const seen = new Set();
+      prodEdges.forEach(edge => {
+        const siteNode = nodeById[edge.startNode] || nodeById[edge.from];
+        const pdNode = nodeById[edge.endNode] || nodeById[edge.to];
+        if (!siteNode || !pdNode) return;
+        const val = pdNode.properties?.production_total_year || 0;
+        const name = siteNode.properties?.site_name || siteNode.properties?.id || '—';
+        if (!seen.has(name) && val > 0) { seen.add(name); data.push({ name, value: Math.round(val) }); }
+      });
+      data = data.sort((a, b) => b.value - a.value).slice(0, 8);
+    } else {
+      data = nodes
+        .filter(n => n.properties?.production_total_year > 0)
+        .map(n => ({ name: n.properties?.site_name || n.properties?.id || '—', value: Math.round(n.properties.production_total_year) }))
+        .sort((a, b) => b.value - a.value).slice(0, 8);
+    }
+    return { title: 'Production Total (Year)', dataKey: 'value', labelKey: 'name', data, type: 'bar', color: '#F5A623', xLabel: 'Site', yLabel: 'Production Volume' };
+  }
+
+  // Q: inventory → bar of site_name vs inventory_projected_value_API
+  if (q.includes('inventory')) {
+    const nodeById = {};
+    nodes.forEach(n => { nodeById[n.id] = n; });
+    const invEdges = relationships.filter(r => r.type === 'HAS_INVENTORY_DATA');
+    let data = [];
+    if (invEdges.length > 0) {
+      const seen = new Set();
+      invEdges.forEach(edge => {
+        const siteNode = nodeById[edge.startNode] || nodeById[edge.from];
+        const invNode = nodeById[edge.endNode] || nodeById[edge.to];
+        if (!siteNode || !invNode) return;
+        const val = invNode.properties?.inventory_projected_value_API || 0;
+        const name = siteNode.properties?.site_name || siteNode.properties?.vendor_name || siteNode.properties?.id || '—';
+        if (!seen.has(name) && val > 0) { seen.add(name); data.push({ name, value: val }); }
+      });
+      data = data.sort((a, b) => b.value - a.value).slice(0, 8);
+    } else {
+      data = nodes
+        .filter(n => (n.properties?.inventory_projected_value_API || 0) > 0)
+        .map(n => ({ name: n.properties?.site_name || n.properties?.id || '—', value: n.properties.inventory_projected_value_API }))
+        .sort((a, b) => b.value - a.value).slice(0, 8);
+    }
+    return { title: 'API Inventory Projected Value ($)', dataKey: 'value', labelKey: 'name', data, type: 'bar', color: '#50C878', xLabel: 'Site', yLabel: 'Value ($)' };
+  }
+
+  // Q: countries with both formulation and packing → donut by country (node count per country)
+  if ((q.includes('formulation') && q.includes('packing')) || (q.includes('both') && q.includes('formulation'))) {
+    const countryMap = {};
+    nodes.forEach(n => {
+      const c = n.properties?.site_country_name;
+      if (c) countryMap[c] = (countryMap[c] || 0) + 1;
+    });
+    const data = Object.entries(countryMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    return { title: 'Countries with Formulation & Packing Sites', data, type: 'pie' };
+  }
+
+  // Q: list sites in a specific country → bar of site names by stage
+  if (q.includes('located in') || q.includes('in china') || q.includes('in india') || q.includes('in japan') || q.includes('in sweden') || q.includes('in usa') || q.includes('in us')) {
+    const data = nodes
+      .filter(n => n.properties?.site_name)
+      .map(n => ({ name: n.properties.site_name, stage: n.labels?.[0] || 'Unknown', value: 1 }))
+      .reduce((acc, n) => { if (!acc.find(x => x.name === n.name && x.stage === n.stage)) acc.push(n); return acc; }, [])
+      .map(n => ({ name: `${n.name} (${n.stage})`, value: 1 }));
+    return { title: 'Supply Chain Sites in Region', dataKey: 'value', labelKey: 'name', data, type: 'bar', color: '#E67E22', xLabel: 'Site', yLabel: 'Count' };
+  }
+
+  // Q: countries / external vendor / located in → donut by country
+  if (q.includes('countr') || q.includes('external') || q.includes('located')) {
+    const countryMap = nodes.reduce((acc, n) => {
+      const c = n.properties?.vendor_country_name || n.properties?.site_country_name;
+      if (c) acc[c] = (acc[c] || 0) + 1;
+      return acc;
+    }, {});
+    const data = Object.entries(countryMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    return { title: 'Sites by Country', data, type: 'pie' };
+  }
+
+  // Q: downstream / connectivity / supply to → bar of formulation sites by downstream count
+  if (q.includes('downstream') || q.includes('supply to') || q.includes('connectivity')) {
+    const connMap = {};
+    nodes.forEach(n => {
+      if (n.properties?.connections) connMap[n.properties.site_name || n.properties.id] = Array.isArray(n.properties.connections) ? n.properties.connections.length : 0;
+    });
+    const data = Object.entries(connMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 8);
+    return { title: 'Downstream Connections per Site', dataKey: 'value', labelKey: 'name', data, type: 'bar', color: '#7B68EE', xLabel: 'Site', yLabel: 'Connections' };
+  }
+
+  // Q: shared sites / both brands → bar by node type
+  if (q.includes('both') || q.includes('shared')) {
+    const typeMap = nodes.reduce((acc, n) => { const t = n.labels?.[0] || 'Unknown'; acc[t] = (acc[t] || 0) + 1; return acc; }, {});
+    const data = Object.entries(typeMap).map(([name, value]) => ({ name, value }));
+    return { title: 'Shared Sites by Node Type', data, type: 'pie' };
+  }
+
+  // Q: customer markets → bar of customer market names (properties.labels has the display name)
+  if (q.includes('customer') || q.includes('market')) {
+    const seen = new Set();
+    const markets = nodes
+      .filter(n => n.labels?.[0] === 'Customer_Market')
+      .map(n => {
+        const label = n.properties?.labels;
+        const name = (typeof label === 'string' && label) ? label : (n.properties?.id || '—');
+        return { name, value: 1 };
+      })
+      .filter(m => { if (seen.has(m.name)) return false; seen.add(m.name); return true; });
+    return { title: 'Customer Markets Served by Forxiga Packing Sites', dataKey: 'value', labelKey: 'name', data: markets, type: 'bar', color: '#E74C3C', xLabel: 'Market', yLabel: 'Count' };
+  }
+
+  // Default: node type breakdown as donut
+  const typeMap = nodes.reduce((acc, n) => { const t = n.labels?.[0] || 'Unknown'; acc[t] = (acc[t] || 0) + 1; return acc; }, {});
+  const data = Object.entries(typeMap).map(([name, value]) => ({ name, value }));
+  return { title: 'Node Types in Result', data, type: 'pie' };
+};
+
+const QueryResultsDashboard = ({ graphData, userQuestion }) => {
+  if (!graphData || graphData.nodes.length === 0) return null;
+  const chart = buildChartConfig(userQuestion || '', graphData.nodes, graphData.relationships || []);
+
+  return (
+    <div className="query-dashboard">
+      <div className="qd-header">📊 {chart.title}</div>
+      <div className="qd-chart-body">
+        <ResponsiveContainer width="100%" height={240}>
+          {chart.type === 'pie' ? (
+            <PieChart>
+              <Pie data={chart.data} cx="50%" cy="50%" outerRadius={90} innerRadius={45} dataKey="value" label={({ name, value }) => `${name} (${value})`} labelLine={false}>
+                {chart.data.map((entry, i) => (
+                  <Cell key={i} fill={LABEL_COLORS[entry.name] || `hsl(${i * 47}, 65%, 55%)`} />
+                ))}
+              </Pie>
+              <Tooltip content={<CustomTooltip />} />
+              <Legend iconType="circle" iconSize={10} />
+            </PieChart>
+          ) : (
+            <BarChart data={chart.data} margin={{ top: 5, right: 20, left: 10, bottom: 55 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey={chart.labelKey} tick={{ fontSize: 11 }} angle={-35} textAnchor="end" interval={0} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey={chart.dataKey} fill={chart.color || '#0B6FCC'} radius={[4, 4, 0, 0]} />
+            </BarChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
+
 const ChatQuery = () => {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
@@ -60,26 +268,55 @@ const ChatQuery = () => {
 
   // Hardcoded questions from chatService.js - User can ONLY click these
   const sampleQuestions = [
-    // === OPERATIONAL QUESTIONS ===
-    // {
-    //   text: "which forxiga manufacturing and packing sites are operating above 80% capacity",
-    //   icon: "🏭",
-    //   description: "High-Capacity Sites (>80%)"
-    // },
     {
-      text: "which forxiga supply chain nodes are located in india and how many materials do they handle",
-      icon: "🇮🇳",
-      description: "India Supply Chain Network"
-    },
-    {
-      text: "which suppliers provide forxiga api materials and how many sources exist per material",
+      text: "which tagrisso api suppliers feed into the snackviken formulation site",
       icon: "🧪",
-      description: "API Suppliers & Sources"
+      description: "Tagrisso API Suppliers → SE Snäckviken"
     },
     {
-      text: "which forxiga packing sites handle more than 30 materials",
+      text: "which forxiga formulation sites are dependent on a single api supplier",
+      icon: "⚠️",
+      description: "Forxiga Single-Source API Risk"
+    },
+    {
+      text: "which tagrisso nodes are external vendor sites and what countries are they in",
+      icon: "🌍",
+      description: "Tagrisso External Vendor Sites"
+    },
+    {
+      text: "show forxiga nodes where api inventory projected value is greater than 1 million",
+      icon: "💰",
+      description: "Forxiga High API Inventory"
+    },
+    {
+      text: "which tagrisso packing sites have the highest production total year",
       icon: "📦",
-      description: "High-Volume Packing Sites"
+      description: "Tagrisso Top Packing Production"
+    },
+    {
+      text: "list all forxiga supply chain sites located in china",
+      icon: "🇨🇳",
+      description: "Forxiga China Sites"
+    },
+    {
+      text: "which countries have both a formulation and a packing site for tagrisso",
+      icon: "🗺️",
+      description: "Tagrisso Formulation + Packing Countries"
+    },
+    {
+      text: "are there any sites that appear in both forxiga and tagrisso supply chains",
+      icon: "🔄",
+      description: "Shared Sites Across Both Brands"
+    },
+    {
+      text: "show all customer markets supplied by forxiga packing sites",
+      icon: "🏪",
+      description: "Forxiga Customer Markets"
+    },
+    {
+      text: "which forxiga formulation sites supply to more than 5 downstream nodes",
+      icon: "🔗",
+      description: "Forxiga High-Connectivity Formulation Sites"
     }
   ];
 
@@ -357,7 +594,7 @@ const ChatQuery = () => {
         </div>
       </div>
 
-      {/* Right Side - Graph Visualization */}
+      {/* Right Side - Graph Visualization + Dashboard */}
       <div className="graph-panel">
         {!graphData ? (
           <div className="empty-state">
@@ -366,10 +603,15 @@ const ChatQuery = () => {
             <p>Ask a question to see the graph visualization</p>
           </div>
         ) : (
-          <GraphVisualization
-            externalJobData={jobData}
-            externalGraphData={graphData}
-          />
+          <div className="graph-and-dashboard">
+            <div className="chat-graph-wrapper">
+              <GraphVisualization
+                externalJobData={jobData}
+                externalGraphData={graphData}
+              />
+            </div>
+            <QueryResultsDashboard graphData={graphData} userQuestion={jobData?.userQuestion} />
+          </div>
         )}
       </div>
     </div>
