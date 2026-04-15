@@ -367,11 +367,14 @@ The Tagrisso supply chain has external vendor and ESM (External Supply Managemen
 
   // Q11: Forxiga formulation sites with >5 downstream connections
   if (normalizedQ.includes('formulation') && normalizedQ.includes('5 downstream')) {
-    const formNodes = graphData?.nodes?.filter(n => n.labels?.[0] === 'Formulation') || [];
+    const nodeById = {};
+    (graphData?.nodes || []).forEach(n => { nodeById[n.id] = n; });
     const connCounts = {};
-    formNodes.forEach(n => {
-      const name = n.properties?.site_name || n.properties?.id;
-      if (name) connCounts[name] = (connCounts[name] || 0) + 1;
+    (graphData?.relationships || []).filter(r => r.type === 'SUPPLIES_TO').forEach(edge => {
+      const siteNode = nodeById[edge.startNode] || nodeById[edge.from];
+      if (!siteNode || siteNode.labels?.[0] !== 'Formulation') return;
+      const name = siteNode.properties?.site_name || siteNode.properties?.id || '—';
+      connCounts[name] = (connCounts[name] || 0) + 1;
     });
     const siteLines = Object.entries(connCounts)
       .sort((a, b) => b[1] - a[1])

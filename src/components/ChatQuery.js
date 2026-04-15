@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Label
 } from 'recharts';
 import GraphVisualization from './GraphVisualization';
 import { processChatQuery } from '../services/chatService';
@@ -182,12 +182,17 @@ const buildChartConfig = (question, nodes, relationships = []) => {
 
   // Q: downstream / connectivity / supply to → bar of formulation sites by downstream count
   if (q.includes('downstream') || q.includes('supply to') || q.includes('connectivity')) {
+    const nodeById = {};
+    nodes.forEach(n => { nodeById[n.id] = n; });
     const connMap = {};
-    nodes.forEach(n => {
-      if (n.properties?.connections) connMap[n.properties.site_name || n.properties.id] = Array.isArray(n.properties.connections) ? n.properties.connections.length : 0;
+    relationships.filter(r => r.type === 'SUPPLIES_TO').forEach(edge => {
+      const siteNode = nodeById[edge.startNode] || nodeById[edge.from];
+      if (!siteNode || siteNode.labels?.[0] !== 'Formulation') return;
+      const name = siteNode.properties?.site_name || siteNode.properties?.id || '—';
+      connMap[name] = (connMap[name] || 0) + 1;
     });
     const data = Object.entries(connMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 8);
-    return { title: 'Downstream Connections per Site', dataKey: 'value', labelKey: 'name', data, type: 'bar', color: '#7B68EE', xLabel: 'Site', yLabel: 'Connections' };
+    return { title: 'Downstream Connections per Formulation Site', dataKey: 'value', labelKey: 'name', data, type: 'bar', color: '#7B68EE', xLabel: 'Formulation Site', yLabel: 'Downstream Count' };
   }
 
   // Q: shared sites / both brands → bar by node type
@@ -237,10 +242,14 @@ const QueryResultsDashboard = ({ graphData, userQuestion }) => {
               <Legend iconType="circle" iconSize={10} />
             </PieChart>
           ) : (
-            <BarChart data={chart.data} margin={{ top: 5, right: 20, left: 10, bottom: 55 }}>
+            <BarChart data={chart.data} margin={{ top: 5, right: 20, left: 20, bottom: 70 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey={chart.labelKey} tick={{ fontSize: 11 }} angle={-35} textAnchor="end" interval={0} />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <XAxis dataKey={chart.labelKey} tick={{ fontSize: 11 }} angle={-35} textAnchor="end" interval={0}>
+                {chart.xLabel && <Label value={chart.xLabel} position="insideBottom" offset={-15} style={{ fontSize: 12, fill: '#555', fontWeight: 600 }} />}
+              </XAxis>
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false}>
+                {chart.yLabel && <Label value={chart.yLabel} angle={-90} position="insideLeft" offset={10} style={{ fontSize: 12, fill: '#555', fontWeight: 600 }} />}
+              </YAxis>
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey={chart.dataKey} fill={chart.color || '#0B6FCC'} radius={[4, 4, 0, 0]} />
             </BarChart>
