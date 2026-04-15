@@ -186,6 +186,7 @@ const ChatQuery = () => {
       // Prepare job data for GraphVisualization
       const job = {
         jobId: 'chat_query_001',
+        userQuestion: question, // Pass the user's question for context-aware dashboards
         nodes: result.graphData.nodes,
         relationships: result.graphData.relationships,
         availableAlgorithms: [

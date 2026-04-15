@@ -61,12 +61,6 @@ const AnalyticsDashboard = () => {
     { name: 'Other Stages', value: 38, count: 295 }
   ];
 
-  const getBarColor = (value) => {
-    if (value >= 85) return '#E91E63'; // Critical - Red
-    if (value >= 70) return '#FF9800'; // High - Orange
-    return '#4CAF50'; // Good - Green
-  };
-
   return (
     <div className="analytics-dashboard">
       {/* Header */}

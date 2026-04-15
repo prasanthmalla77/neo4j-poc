@@ -4,10 +4,12 @@ import './GraphConfigModal.css';
 const GraphConfigModal = ({ isOpen, onClose, allNodes, allRelationships, onApplyConfig }) => {
   const [selectedNodeLabels, setSelectedNodeLabels] = useState([]);
   const [selectedRelTypes, setSelectedRelTypes] = useState([]);
+  const [selectedBrands, setSelectedBrands] = useState([]);
   const [availableNodeLabels, setAvailableNodeLabels] = useState([]);
   const [availableRelTypes, setAvailableRelTypes] = useState([]);
+  const [availableBrands, setAvailableBrands] = useState([]);
 
-  // Extract unique node labels and relationship types
+  // Extract unique node labels, relationship types, and brands
   useEffect(() => {
     if (allNodes && allRelationships) {
       // Get unique node labels
@@ -24,9 +26,19 @@ const GraphConfigModal = ({ isOpen, onClose, allNodes, allRelationships, onApply
       });
       setAvailableRelTypes(Array.from(relTypes).sort());
 
-      // Select all by default
-      setSelectedNodeLabels(Array.from(labels));
-      setSelectedRelTypes(Array.from(relTypes));
+      // Get unique brands from node properties
+      const brands = new Set();
+      allNodes.forEach(node => {
+        if (node.properties?.brand) {
+          brands.add(node.properties.brand);
+        }
+      });
+      setAvailableBrands(Array.from(brands).sort());
+
+      // Deselect all by default - user must configure what to load
+      setSelectedNodeLabels([]);
+      setSelectedRelTypes([]);
+      setSelectedBrands([]);
     }
   }, [allNodes, allRelationships]);
 
@@ -62,10 +74,27 @@ const GraphConfigModal = ({ isOpen, onClose, allNodes, allRelationships, onApply
     setSelectedRelTypes([]);
   };
 
+  const handleBrandToggle = (brand) => {
+    setSelectedBrands(prev =>
+      prev.includes(brand)
+        ? prev.filter(b => b !== brand)
+        : [...prev, brand]
+    );
+  };
+
+  const handleSelectAllBrands = () => {
+    setSelectedBrands(availableBrands);
+  };
+
+  const handleDeselectAllBrands = () => {
+    setSelectedBrands([]);
+  };
+
   const handleApply = () => {
     onApplyConfig({
       nodeLabels: selectedNodeLabels,
-      relationshipTypes: selectedRelTypes
+      relationshipTypes: selectedRelTypes,
+      brands: selectedBrands
     });
     onClose();
   };
@@ -73,6 +102,7 @@ const GraphConfigModal = ({ isOpen, onClose, allNodes, allRelationships, onApply
   const handleReset = () => {
     setSelectedNodeLabels(availableNodeLabels);
     setSelectedRelTypes(availableRelTypes);
+    setSelectedBrands(availableBrands);
   };
 
   if (!isOpen) return null;
@@ -87,8 +117,38 @@ const GraphConfigModal = ({ isOpen, onClose, allNodes, allRelationships, onApply
 
         <div className="config-modal-body">
           <p className="config-modal-description">
-            Select which node types and relationships you want to display in the graph visualization.
+            Select which brands, node types, and relationships you want to display in the graph visualization.
           </p>
+
+          {/* Brand Selection Section */}
+          {availableBrands.length > 0 && (
+            <div className="config-section">
+              <div className="config-section-header">
+                <h3>Brand Filter</h3>
+                <div className="config-section-actions">
+                  <button className="config-btn-small" onClick={handleSelectAllBrands}>Select All</button>
+                  <button className="config-btn-small" onClick={handleDeselectAllBrands}>Deselect All</button>
+                </div>
+              </div>
+              <div className="config-checkboxes">
+                {availableBrands.map(brand => (
+                  <label key={brand} className="config-checkbox-item">
+                    <input
+                      type="checkbox"
+                      checked={selectedBrands.includes(brand)}
+                      onChange={() => handleBrandToggle(brand)}
+                    />
+                    <span className="config-checkbox-label" style={{ textTransform: 'capitalize', fontWeight: '600' }}>
+                      {brand}
+                    </span>
+                    <span className="config-checkbox-count">
+                      ({allNodes.filter(n => n.properties?.brand === brand).length} nodes)
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Node Labels Section */}
           <div className="config-section">
@@ -144,7 +204,7 @@ const GraphConfigModal = ({ isOpen, onClose, allNodes, allRelationships, onApply
 
           {/* Summary */}
           <div className="config-summary">
-            <strong>Selected:</strong> {selectedNodeLabels.length} node type(s), {selectedRelTypes.length} relationship type(s)
+            <strong>Selected:</strong> {selectedBrands.length > 0 ? `${selectedBrands.length} brand(s), ` : ''}{selectedNodeLabels.length} node type(s), {selectedRelTypes.length} relationship type(s)
           </div>
         </div>
 

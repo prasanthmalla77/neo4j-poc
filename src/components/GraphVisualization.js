@@ -1,13 +1,14 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { InteractiveNvlWrapper } from '@neo4j-nvl/react';
 import { mockJobResponse } from '../data/backendMockData';
 import { fetchGraphData, fetchFilteredGraphData, testConnection } from '../services/neo4jService';
-import { prepareGraphData, highlightSimilarNodes, highlightPath, resetHighlighting } from '../utils/graphHighlighting';
-import { createGdsProjection, runNodeSimilarity, runShortestPath } from '../services/gdsService';
+import { prepareGraphData, getNodeColorByLabel } from '../utils/graphHighlighting';
+import { createGdsProjection, registerProjection, runNodeSimilarity, runShortestPath } from '../services/gdsService';
 import { ALGORITHM_TYPES } from '../data/algorithmConfigs';
 import AlgorithmPanel from './AlgorithmPanel';
 import AlgorithmResults from './AlgorithmResults';
 import GraphConfigModal from './GraphConfigModal';
+
 import './GraphVisualization.css';
 
 // Toggle between mock and real Neo4j data
@@ -26,6 +27,7 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
   const [algorithmResults, setAlgorithmResults] = useState(null);
   const [error, setError] = useState(null);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  // eslint-disable-next-line no-unused-vars
   const [graphConfig, setGraphConfig] = useState({ nodeLabels: [], relationshipTypes: [] });
   const [isLoadingConfig, setIsLoadingConfig] = useState(false);
 
@@ -39,18 +41,7 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
       setFullGraphData(preparedData);
       setGraphData(preparedData);
 
-      // Create GDS projection for external data
-      createGdsProjection(
-        externalJobData.jobId,
-        externalJobData.nodes,
-        externalJobData.relationships
-      ).then(projection => {
-        console.log('[GraphViz] GDS projection created:', projection);
-        setGdsProjection(projection);
-      }).catch(err => {
-        console.error('[GraphViz] Failed to create GDS projection:', err);
-        setError(err.message);
-      });
+      // GDS projection is created lazily on first algorithm execution
     }
   }, [externalJobData, externalGraphData]);
 
@@ -84,18 +75,12 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
         // Prepare graph data for visualization
         const preparedData = prepareGraphData(job);
         setFullGraphData(preparedData);
-        setGraphData(preparedData);
 
-        // Create GDS projection
-        const projection = await createGdsProjection(
-          job.jobId,
-          job.nodes,
-          job.relationships
-        );
-        setGdsProjection(projection);
+        // Start with empty graph - user must configure what to load
+        setGraphData({ nodes: [], relationships: [] });
 
+        // GDS projection is created lazily on first algorithm execution
         console.log('Job initialized:', job.jobId);
-        console.log('GDS Projection created:', projection.name);
       } catch (err) {
         console.error('Failed to initialize job:', err);
         setError(err.message || 'Failed to initialize graph data');
@@ -103,6 +88,7 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
     };
 
     initializeJob();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // NVL configuration options
@@ -167,30 +153,63 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
     try {
       setIsLoadingConfig(true);
       setError(null);
-      console.log('[GraphViz] Fetching filtered data from Neo4j...');
 
-      // Fetch filtered data from Neo4j
-      const filteredJob = await fetchFilteredGraphData(
-        jobData?.jobId || 'neo4j_job_001',
-        config.nodeLabels,
-        config.relationshipTypes
-      );
+      // Check if we have external data from chat query
+      if (externalJobData) {
+        // Filter within the existing chat query result (in-memory filtering)
+        console.log('[GraphViz] Filtering within chat query result (in-memory)...');
 
-      console.log('[GraphViz] Fetched filtered data:', filteredJob);
+        const filteredNodes = fullGraphData.nodes.filter(node => {
+          // Filter by node labels
+          const hasMatchingLabel = node.labels && node.labels.some(label => config.nodeLabels.includes(label));
 
-      // Prepare and set graph data
-      const preparedData = prepareGraphData(filteredJob);
-      setGraphData(preparedData);
+          // Filter by brand if brands are selected
+          if (config.brands && config.brands.length > 0) {
+            const hasMatchingBrand = config.brands.includes(node.properties?.brand);
+            return hasMatchingLabel && hasMatchingBrand;
+          }
 
-      // Update GDS projection with filtered data
-      const projection = await createGdsProjection(
-        filteredJob.jobId,
-        filteredJob.nodes,
-        filteredJob.relationships
-      );
-      setGdsProjection(projection);
+          return hasMatchingLabel;
+        });
 
-      console.log(`[GraphViz] Applied config: ${filteredJob.nodes.length} nodes, ${filteredJob.relationships.length} relationships`);
+        const filteredNodeIds = new Set(filteredNodes.map(n => n.id));
+
+        const filteredRelationships = fullGraphData.relationships.filter(rel => {
+          const hasValidNodes = filteredNodeIds.has(rel.from) && filteredNodeIds.has(rel.to);
+          if (config.relationshipTypes.length === 0) {
+            return hasValidNodes; // Show all relationships if none selected
+          }
+          return rel.type && config.relationshipTypes.includes(rel.type) && hasValidNodes;
+        });
+
+        setGraphData({
+          nodes: filteredNodes,
+          relationships: filteredRelationships
+        });
+
+        console.log(`[GraphViz] Filtered in-memory: ${filteredNodes.length} nodes, ${filteredRelationships.length} relationships`);
+      } else {
+        // Fetch filtered data from Neo4j (for full graph view)
+        console.log('[GraphViz] Fetching filtered data from Neo4j...');
+
+        const filteredJob = await fetchFilteredGraphData(
+          jobData?.jobId || 'neo4j_job_001',
+          config.nodeLabels,
+          config.relationshipTypes,
+          config.brands || []
+        );
+
+        console.log('[GraphViz] Fetched filtered data:', filteredJob);
+
+        // Prepare and set graph data
+        const preparedData = prepareGraphData(filteredJob);
+        setGraphData(preparedData);
+
+        // Reset stale projection so it gets recreated on next algorithm run
+        setGdsProjection(null);
+
+        console.log(`[GraphViz] Applied config from Neo4j: ${filteredJob.nodes.length} nodes, ${filteredJob.relationships.length} relationships`);
+      }
     } catch (err) {
       console.error('[GraphViz] Failed to apply configuration:', err);
       setError('Failed to load filtered graph data: ' + err.message);
@@ -201,53 +220,138 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
 
   // Handle algorithm execution
   const handleAlgorithmExecute = async (algorithmId, config) => {
-    if (!gdsProjection) {
-      setError('GDS projection not ready');
-      return;
-    }
+    console.log('[AlgoExec] ▶ START', { algorithmId, config });
+    console.log('[AlgoExec] Current graphData:', {
+      nodeCount: graphData.nodes.length,
+      relCount: graphData.relationships.length,
+      sampleNode: graphData.nodes[0],
+      sampleRel: graphData.relationships[0],
+    });
 
     setIsExecuting(true);
     setError(null);
-    setAlgorithmResults(null);
+    // Don't clear previous results during execution — clearing causes the results
+    // panel to unmount, shifts the container width, and NVL re-runs force layout.
 
     try {
-      let results;
+      // Lazily create (or recreate) the GDS projection using current graph data
+      const currentNodes = graphData.nodes.map(n => ({
+        id: n.id,
+        labels: n.labels || [],
+        properties: n.properties || {},
+      }));
+      const currentRels = graphData.relationships.map(r => ({
+        id: r.id,
+        type: r.type || r.caption,
+        startNode: r.from,
+        endNode: r.to,
+        properties: r.properties || {},
+      }));
 
+      console.log('[AlgoExec] Mapped nodes for projection:', currentNodes.length, 'sample:', currentNodes[0]);
+      console.log('[AlgoExec] Mapped rels for projection:', currentRels.length, 'sample:', currentRels[0]);
+
+      const jobId = jobData?.jobId || externalJobData?.jobId || 'neo4j_job_001';
+
+      let projection;
       if (algorithmId === ALGORITHM_TYPES.NODE_SIMILARITY) {
-        results = await runNodeSimilarity(gdsProjection.name, config);
+        // Node similarity runs entirely in JS — no GDS projection needed.
+        // Optionally narrow which relationship types feed into neighbour comparison.
+        let projRels = currentRels;
+        if (config.relationshipFilter?.length > 0) {
+          projRels = currentRels.filter(r => config.relationshipFilter.includes(r.type || r.caption));
+        }
+        projection = registerProjection(jobId, currentNodes, projRels);
+      } else {
+        // Shortest path still uses GDS on Neo4j.
+        projection = await createGdsProjection(jobId, currentNodes, currentRels);
+      }
+      console.log('[AlgoExec] Projection ready:', projection);
+      setGdsProjection(projection);
+
+      let results;
+      if (algorithmId === ALGORITHM_TYPES.NODE_SIMILARITY) {
+        console.log('[AlgoExec] Running Node Similarity on projection:', projection.name);
+        results = await runNodeSimilarity(projection.name, config);
       } else if (algorithmId === ALGORITHM_TYPES.SHORTEST_PATH) {
-        results = await runShortestPath(gdsProjection.name, config);
+        console.log('[AlgoExec] Running Shortest Path on projection:', projection.name);
+        results = await runShortestPath(projection.name, config);
       } else {
         throw new Error(`Unknown algorithm: ${algorithmId}`);
       }
 
+      console.log('[AlgoExec] ✅ Results received:', {
+        algorithmType: results.algorithmType,
+        resultCount: results.resultCount,
+        stats: results.stats,
+        firstResult: results.results?.[0],
+      });
       setAlgorithmResults(results);
-      console.log('Algorithm results:', results);
     } catch (err) {
-      console.error('Algorithm execution failed:', err);
+      console.error('[AlgoExec] ❌ FAILED:', err);
+      console.error('[AlgoExec] Error stack:', err.stack);
       setError(err.message || 'Algorithm execution failed');
     } finally {
       setIsExecuting(false);
+      console.log('[AlgoExec] ▶ END');
     }
   };
 
-  // Handle highlighting from results
+  // Handle highlighting from results — update NVL directly via ref (prop changes
+  // to existing nodes do not trigger a visual update in NVL v1.x).
   const handleHighlight = (data, type) => {
+    if (!nvlRef.current) return;
+
     if (type === 'similarity') {
-      // Highlight similar nodes
-      const highlighted = highlightSimilarNodes(data, graphData);
-      setGraphData(highlighted);
+      const highlightSet = new Set(data); // [node1Id, node2Id]
+      nvlRef.current.updateElementsInGraph(
+        graphData.nodes.map(n => ({
+          id: n.id,
+          color: highlightSet.has(n.id) ? '#FF6B6B' : getNodeColorByLabel(n.labels?.[0]),
+          size: highlightSet.has(n.id) ? 38 : 25,
+        })),
+        graphData.relationships.map(r => ({
+          id: r.id,
+          color: (highlightSet.has(r.from) && highlightSet.has(r.to)) ? '#FF8C8C' : undefined,
+          width: (highlightSet.has(r.from) && highlightSet.has(r.to)) ? 3 : 1,
+        }))
+      );
     } else if (type === 'path') {
-      // Highlight path
-      const highlighted = highlightPath(data, graphData);
-      setGraphData(highlighted);
+      // data is a pathResult object with .nodeIds and .relationshipIds
+      const pathNodeIds = new Set(data.nodeIds || []);
+      const pathRelIds  = new Set(data.relationshipIds || []);
+      const gradient    = ['#4ECDC4', '#44A08D', '#45B7B8', '#37A08A'];
+      const pathLen     = Math.max((data.nodeIds?.length || 1) - 1, 1);
+
+      nvlRef.current.updateElementsInGraph(
+        graphData.nodes.map(n => {
+          if (pathNodeIds.has(n.id)) {
+            const idx = (data.nodeIds || []).indexOf(n.id);
+            const colorIdx = Math.floor((idx / pathLen) * (gradient.length - 1));
+            return { id: n.id, color: gradient[colorIdx] || '#4ECDC4', size: 38 };
+          }
+          return { id: n.id, color: getNodeColorByLabel(n.labels?.[0]), size: 25 };
+        }),
+        graphData.relationships.map(r => ({
+          id: r.id,
+          color: pathRelIds.has(r.id) ? '#95E1D3' : undefined,
+          width: pathRelIds.has(r.id) ? 4 : 1,
+        }))
+      );
     }
   };
 
-  // Clear all highlights
+  // Clear all highlights — restore original label-based colors via nvlRef.
   const handleClearHighlight = () => {
-    const reset = resetHighlighting(graphData);
-    setGraphData(reset);
+    if (!nvlRef.current) return;
+    nvlRef.current.updateElementsInGraph(
+      graphData.nodes.map(n => ({
+        id: n.id,
+        color: getNodeColorByLabel(n.labels?.[0]),
+        size: 25,
+      })),
+      graphData.relationships.map(r => ({ id: r.id, color: undefined, width: 1 }))
+    );
   };
 
   // Export results
@@ -305,6 +409,25 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
     return Array.from(labelMap.values());
   };
 
+  // Stable graphData prop for AlgorithmPanel — avoids re-creating the object on
+  // every render which would trigger the AlgorithmPanel useEffect and reset the form.
+  const algoGraphData = useMemo(() => ({
+    ...jobData,
+    nodes: graphData.nodes.map(node => ({
+      id: node.id,
+      labels: node.labels,
+      properties: node.properties
+    })),
+    relationships: graphData.relationships.map(rel => ({
+      id: rel.id,
+      type: rel.type,
+      startNode: rel.from,
+      endNode: rel.to,
+      properties: rel.properties
+    }))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [graphData.nodes, graphData.relationships, jobData]);
+
   if (error && !jobData) {
     return (
       <div style={{ padding: '40px', textAlign: 'center' }}>
@@ -314,11 +437,11 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
     );
   }
 
-  if (!jobData || !gdsProjection) {
+  if (!jobData) {
     return (
       <div style={{ padding: '40px', textAlign: 'center' }}>
         <h2>Loading Graph Data...</h2>
-        <p>Initializing GDS projection for job...</p>
+        <p>Connecting to Neo4j...</p>
       </div>
     );
   }
@@ -350,9 +473,11 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
             <span className="job-stat">
               <strong>{graphData.relationships.length}</strong> relationships
             </span>
-            <span className="job-stat">
-              GDS: <strong>{gdsProjection.name}</strong>
-            </span>
+            {gdsProjection && (
+              <span className="job-stat">
+                GDS: <strong>{gdsProjection.name}</strong>
+              </span>
+            )}
           </div>
         </div>
 
@@ -360,27 +485,27 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
         <div style={{
           marginTop: '12px',
           padding: '10px 16px',
-          background: '#E3F2FD',
-          border: '1px solid #2196F3',
+          background: graphData.nodes.length === 0 ? '#FFF3E0' : '#E3F2FD',
+          border: graphData.nodes.length === 0 ? '1px solid #FF9800' : '1px solid #2196F3',
           borderRadius: '8px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: '12px',
           fontSize: '13px',
-          color: '#1976D2'
+          color: graphData.nodes.length === 0 ? '#E65100' : '#1976D2'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-            <span style={{ fontSize: '16px' }}>💡</span>
+            <span style={{ fontSize: '16px' }}>{graphData.nodes.length === 0 ? '⚠️' : '💡'}</span>
             <span>
-              <strong>Tip:</strong> You can configure the graph by selecting specific nodes and relationships to load only the data you need.
+              <strong>{graphData.nodes.length === 0 ? 'Action Required:' : 'Tip:'}</strong> {graphData.nodes.length === 0 ? 'Click "Configure Graph" to select brands, nodes, and relationships to display.' : 'You can reconfigure the graph by selecting different nodes and relationships.'}
             </span>
           </div>
           <button
             onClick={() => setIsConfigModalOpen(true)}
             style={{
               padding: '8px 16px',
-              background: '#1976D2',
+              background: graphData.nodes.length === 0 ? '#FF9800' : '#1976D2',
               color: 'white',
               border: 'none',
               borderRadius: '6px',
@@ -388,10 +513,11 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
               fontSize: '13px',
               fontWeight: '600',
               whiteSpace: 'nowrap',
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              animation: graphData.nodes.length === 0 ? 'pulse 2s infinite' : 'none'
             }}
-            onMouseEnter={(e) => e.target.style.background = '#1565C0'}
-            onMouseLeave={(e) => e.target.style.background = '#1976D2'}
+            onMouseEnter={(e) => e.target.style.background = graphData.nodes.length === 0 ? '#F57C00' : '#1565C0'}
+            onMouseLeave={(e) => e.target.style.background = graphData.nodes.length === 0 ? '#FF9800' : '#1976D2'}
           >
             ⚙️ Configure Graph
           </button>
@@ -478,21 +604,7 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
         <div className="algorithm-container">
           <AlgorithmPanel
             availableAlgorithms={jobData.availableAlgorithms}
-            graphData={{
-              ...jobData,
-              nodes: graphData.nodes.map(node => ({
-                id: node.id,
-                labels: node.labels,
-                properties: node.properties
-              })),
-              relationships: graphData.relationships.map(rel => ({
-                id: rel.id,
-                type: rel.type,
-                startNode: rel.from,
-                endNode: rel.to,
-                properties: rel.properties
-              }))
-            }}
+            graphData={algoGraphData}
             onExecute={handleAlgorithmExecute}
             isExecuting={isExecuting}
           />
@@ -582,6 +694,7 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
         allRelationships={fullGraphData.relationships}
         onApplyConfig={handleApplyConfig}
       />
+
     </div>
   );
 };

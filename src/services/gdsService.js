@@ -1,398 +1,451 @@
 // Neo4j Graph Data Science (GDS) Service Layer
-// Mock implementations for GDS operations
-// Will be replaced with actual Neo4j driver calls in Phase 6
+// All algorithms run on Neo4j GDS via Bolt - no in-memory fallback.
 
+import neo4j from 'neo4j-driver';
+import { initDriver } from './neo4jService';
 import { ALGORITHM_TYPES } from '../data/algorithmConfigs';
 
-// Store active projections in memory (mock)
+const NEO4J_DATABASE = process.env.REACT_APP_NEO4J_DATABASE || 'neo4j';
+
+// Projection registry - stores node/rel data for result enrichment after GDS calls
 const activeProjections = new Map();
 
+// Convert a Neo4j Integer object to JS number safely
+const toNum = (val) => {
+  if (val == null) return 0;
+  if (typeof val === 'number') return val;
+  if (typeof val.toNumber === 'function') return val.toNumber();
+  if (typeof val.low === 'number') return val.low;
+  return Number(val);
+};
+
+// --- Projection management --------------------------------------------------------
+
 /**
- * Create a GDS projection from graph data
- * @param {string} jobId - The job identifier
- * @param {Array} nodes - Array of node objects
- * @param {Array} relationships - Array of relationship objects
- * @returns {Promise<Object>} Projection details
+ * Create (or recreate) a named GDS graph projection on the Neo4j server.
+ * When targetLabel is provided the projection is scoped to that label only
+ * (with optional property embeddings). This prevents GDS from including nodes
+ * outside the current filtered view, keeping result IDs in sync with graphData.
  */
 export const createGdsProjection = async (jobId, nodes, relationships) => {
   const projectionName = `graph_gds_${jobId}`;
 
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 500));
+  // Cache node/rel data locally for result enrichment
+  activeProjections.set(projectionName, { name: projectionName, jobId, nodes, relationships });
 
-  // Mock projection creation
-  const projection = {
+  const relTypes = [...new Set(relationships.map(r => r.type))].filter(Boolean);
+
+  // Build an UNDIRECTED relationship projection map.
+  // By default GDS nodeSimilarity uses OUTGOING edges only — nodes that only have
+  // INCOMING edges (e.g. Distribution_Hub receiving supply) appear degree-0 and
+  // return zero results. Making every relationship type UNDIRECTED fixes this.
+  const buildRelProjection = (types) => {
+    if (types.length === 0) {
+      // Wildcard: project all types as undirected
+      return { all: { type: '*', orientation: 'UNDIRECTED' } };
+    }
+    const proj = {};
+    types.forEach(t => { proj[t] = { type: t, orientation: 'UNDIRECTED' }; });
+    return proj;
+  };
+  const relProjection = buildRelProjection(relTypes);
+
+  const driver = initDriver();
+  const session = driver.session({ database: NEO4J_DATABASE });
+  try {
+    // Drop stale projection if present (failIfMissing = false)
+    try {
+      await session.run('CALL gds.graph.drop($name, false) YIELD graphName', { name: projectionName });
+    } catch (_) { /* not present - fine */ }
+
+    let result;
+    const nodeLabels = [...new Set(nodes.flatMap(n => n.labels || []))].filter(Boolean);
+
+    if (nodeLabels.length === 0) {
+      result = await session.run(
+        "CALL gds.graph.project($name, '*', $relProjection) YIELD graphName, nodeCount, relationshipCount",
+        { name: projectionName, relProjection }
+      );
+    } else {
+      result = await session.run(
+        'CALL gds.graph.project($name, $nodeLabels, $relProjection) YIELD graphName, nodeCount, relationshipCount',
+        { name: projectionName, nodeLabels, relProjection }
+      );
+    }
+
+    const rec = result.records[0];
+    const nodeCount         = toNum(rec.get('nodeCount'));
+    const relationshipCount = toNum(rec.get('relationshipCount'));
+
+    console.log(`[GDS] Projection created: ${projectionName} - ${nodeCount} nodes, ${relationshipCount} rels`);
+
+    return {
+      name: projectionName,
+      jobId,
+      nodeCount,
+      relationshipCount,
+      createdAt: new Date().toISOString(),
+      status: 'ready',
+    };
+  } finally {
+    await session.close();
+  }
+};
+
+export const projectionExists = (projectionName) => activeProjections.has(projectionName);
+export const getProjection    = (projectionName) => activeProjections.get(projectionName) || null;
+
+/**
+ * Register graph data in-memory only — no Neo4j/GDS call.
+ * Used by node similarity which runs entirely in JS.
+ */
+export const registerProjection = (jobId, nodes, relationships) => {
+  const projectionName = `graph_gds_${jobId}`;
+  activeProjections.set(projectionName, { name: projectionName, jobId, nodes, relationships });
+  console.log(`[Similarity] Registered in-memory projection: ${projectionName} — ${nodes.length} nodes, ${relationships.length} rels`);
+  return {
     name: projectionName,
     jobId,
     nodeCount: nodes.length,
     relationshipCount: relationships.length,
     createdAt: new Date().toISOString(),
-    status: 'ready'
+    status: 'ready',
   };
-
-  activeProjections.set(projectionName, {
-    ...projection,
-    nodes,
-    relationships
-  });
-
-  console.log(`[GDS Service] Created projection: ${projectionName}`);
-
-  return projection;
 };
 
-/**
- * Check if a GDS projection exists
- * @param {string} projectionName - The projection name
- * @returns {boolean} Whether the projection exists
- */
-export const projectionExists = (projectionName) => {
-  return activeProjections.has(projectionName);
-};
+// --- Node Similarity ---------------------------------------------------------------
 
 /**
- * Get projection details
- * @param {string} projectionName - The projection name
- * @returns {Object|null} Projection details or null if not found
- */
-export const getProjection = (projectionName) => {
-  return activeProjections.get(projectionName) || null;
-};
-
-/**
- * Run Node Similarity algorithm
- * @param {string} projectionName - The GDS projection name
- * @param {Object} config - Algorithm configuration
- * @returns {Promise<Object>} Algorithm results
+ * Run Node Similarity entirely in JavaScript (no GDS call).
+ *
+ * similarityMode: 'neighbours' → Jaccard on shared graph neighbours
+ *                 'properties' → Property match score: matched_keys / total_keys
+ *                                Works on strings, numbers, any value type.
  */
 export const runNodeSimilarity = async (projectionName, config) => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
-
+  console.log('[Similarity] runNodeSimilarity (JS) called:', { projectionName, config });
   const projection = activeProjections.get(projectionName);
   if (!projection) {
     throw new Error(`Projection ${projectionName} not found`);
   }
 
-  console.log(`[GDS Service] Running Node Similarity on ${projectionName}`, config);
-
-  // Mock similarity computation
-  const { nodes, relationships } = projection;
   const {
-    similarityMetric = 'jaccard',
-    topK = 10,
     similarityThreshold = 0.5,
-    nodeFilter = [],
-    relationshipFilter = []
+    degreeCutoff = 1,
+    similarityMode = 'neighbours',
+    targetNodeLabel = '',
+    targetProperties = [],
+    relationshipFilter = [],
   } = config;
 
-  // Filter nodes if specified
-  let filteredNodes = nodes;
-  if (nodeFilter.length > 0) {
-    filteredNodes = nodes.filter(node =>
-      node.labels.some(label => nodeFilter.includes(label))
+  const gdsMetric = similarityMode === 'properties' ? 'MATCH' : 'JACCARD';
+  const { nodes, relationships } = projection;
+
+  // ── 1. Optionally filter by relationship type ──────────────────────────────
+  const activeRels = relationshipFilter.length > 0
+    ? relationships.filter(r => relationshipFilter.includes(r.type))
+    : relationships;
+
+  // ── 2. Build undirected adjacency sets ────────────────────────────────────
+  const neighborMap = new Map(); // nodeId → Set of neighbor nodeIds
+  nodes.forEach(n => neighborMap.set(n.id, new Set()));
+  activeRels.forEach(r => {
+    const s = r.startNode ?? r.from;
+    const e = r.endNode ?? r.to;
+    if (neighborMap.has(s)) neighborMap.get(s).add(e);
+    if (neighborMap.has(e)) neighborMap.get(e).add(s);
+  });
+
+  // ── 3. Determine candidate nodes ──────────────────────────────────────────
+  // degreeCutoff only applies to 'neighbours' mode — for 'properties' mode we
+  // compare property values, so relationship count is irrelevant.
+  let candidates = similarityMode === 'neighbours'
+    ? nodes.filter(n => neighborMap.get(n.id)?.size >= degreeCutoff)
+    : nodes;
+  if (targetNodeLabel) {
+    candidates = candidates.filter(n => n.labels?.includes(targetNodeLabel));
+  }
+  console.log('[Similarity] Candidates after filters:', candidates.length);
+
+  // ── 4. Compute similarity for every pair ──────────────────────────────────
+  const pairs = [];
+
+  if (similarityMode === 'neighbours') {
+    // Jaccard: |A ∩ B| / |A ∪ B|  — also capture shared/unique neighbour IDs for display
+    for (let i = 0; i < candidates.length; i++) {
+      for (let j = i + 1; j < candidates.length; j++) {
+        const a = candidates[i];
+        const b = candidates[j];
+        const nA = neighborMap.get(a.id);
+        const nB = neighborMap.get(b.id);
+        const sharedIds    = [...nA].filter(x => nB.has(x));
+        const onlyInA      = [...nA].filter(x => !nB.has(x));
+        const onlyInB      = [...nB].filter(x => !nA.has(x));
+        const union        = sharedIds.length + onlyInA.length + onlyInB.length;
+        const score        = union > 0 ? sharedIds.length / union : 0;
+        if (score >= similarityThreshold) {
+          // Resolve IDs to node objects for display
+          const resolve = (id) => nodes.find(n => n.id === id) || { id, labels: [], properties: {} };
+          pairs.push({
+            node1: a.id, node2: b.id, score,
+            node1Data: a, node2Data: b,
+            detail: {
+              shared:   sharedIds.map(resolve),
+              onlyIn1:  onlyInA.map(resolve),
+              onlyIn2:  onlyInB.map(resolve),
+            },
+          });
+        }
+      }
+    }
+  } else {
+    // Property value matching: score = number of keys with equal values / total keys compared.
+    // Works for strings, numbers, booleans — any value. No vectorisation needed.
+    const propKeys = targetProperties.length > 0
+      ? targetProperties
+      : [...new Set(candidates.flatMap(n => Object.keys(n.properties || {})))];
+
+    const normalize = (v) => (v == null ? '' : String(v).trim().toLowerCase());
+
+    for (let i = 0; i < candidates.length; i++) {
+      for (let j = i + 1; j < candidates.length; j++) {
+        const a = candidates[i];
+        const b = candidates[j];
+        const propsA = a.properties || {};
+        const propsB = b.properties || {};
+
+        // Only count keys where at least one node has a non-empty value
+        const relevantKeys = propKeys.filter(k =>
+          normalize(propsA[k]) !== '' || normalize(propsB[k]) !== ''
+        );
+        if (relevantKeys.length === 0) continue;
+
+        const matched = relevantKeys.filter(k =>
+          normalize(propsA[k]) === normalize(propsB[k]) && normalize(propsA[k]) !== ''
+        ).length;
+
+        const score = matched / relevantKeys.length;
+        if (score >= similarityThreshold) {
+          // Build per-property breakdown for display
+          const matchedProps   = relevantKeys.filter(k =>
+            normalize(propsA[k]) === normalize(propsB[k]) && normalize(propsA[k]) !== ''
+          );
+          const unmatchedProps = relevantKeys.filter(k =>
+            normalize(propsA[k]) !== normalize(propsB[k])
+          );
+          pairs.push({
+            node1: a.id, node2: b.id, score,
+            node1Data: a, node2Data: b,
+            detail: { matchedProps, unmatchedProps },
+          });
+        }
+      }
+    }
+  }
+
+  // ── 5. Sort by score descending ─────────────────────────────────────────
+  pairs.sort((a, b) => b.score - a.score);
+  let results = pairs;
+
+  // ── 6. Remove same-physical-site pairs ───────────────────────────────────
+  results = results.filter(r => {
+    const p1 = r.node1Data.properties || {};
+    const p2 = r.node2Data.properties || {};
+    return !(
+      (p1.plant_code && p2.plant_code && p1.plant_code === p2.plant_code) ||
+      (p1.id        && p2.id        && p1.id        === p2.id)
     );
-  }
-
-  // Build adjacency information for similarity calculation
-  const nodeNeighbors = new Map();
-  filteredNodes.forEach(node => {
-    nodeNeighbors.set(node.id, new Set());
   });
 
-  relationships.forEach(rel => {
-    if (relationshipFilter.length === 0 || relationshipFilter.includes(rel.type)) {
-      if (nodeNeighbors.has(rel.startNode)) {
-        nodeNeighbors.get(rel.startNode).add(rel.endNode);
-      }
-      if (nodeNeighbors.has(rel.endNode)) {
-        nodeNeighbors.get(rel.endNode).add(rel.startNode);
-      }
-    }
-  });
-
-  // Calculate similarity pairs (mock)
-  // IMPORTANT: Only compare nodes of the same type/label
-  const similarityPairs = [];
-  const nodeIds = Array.from(nodeNeighbors.keys());
-
-  for (let i = 0; i < nodeIds.length; i++) {
-    for (let j = i + 1; j < nodeIds.length; j++) {
-      const node1Id = nodeIds[i];
-      const node2Id = nodeIds[j];
-
-      const node1 = nodes.find(n => n.id === node1Id);
-      const node2 = nodes.find(n => n.id === node2Id);
-
-      // Skip if nodes don't have the same primary label
-      if (!node1 || !node2 || node1.labels[0] !== node2.labels[0]) {
-        continue;
-      }
-
-      const neighbors1 = nodeNeighbors.get(node1Id);
-      const neighbors2 = nodeNeighbors.get(node2Id);
-
-      // Calculate similarity based on metric
-      let similarity = 0;
-      if (similarityMetric === 'jaccard') {
-        const intersection = new Set([...neighbors1].filter(x => neighbors2.has(x)));
-        const union = new Set([...neighbors1, ...neighbors2]);
-        similarity = union.size > 0 ? intersection.size / union.size : 0;
-      } else if (similarityMetric === 'overlap') {
-        const intersection = new Set([...neighbors1].filter(x => neighbors2.has(x)));
-        const minSize = Math.min(neighbors1.size, neighbors2.size);
-        similarity = minSize > 0 ? intersection.size / minSize : 0;
-      } else if (similarityMetric === 'cosine') {
-        const intersection = new Set([...neighbors1].filter(x => neighbors2.has(x)));
-        const denominator = Math.sqrt(neighbors1.size * neighbors2.size);
-        similarity = denominator > 0 ? intersection.size / denominator : 0;
-      } else {
-        // Pearson or other - use random for mock
-        similarity = Math.random() * 0.5 + 0.3;
-      }
-
-      // Add some randomness for demo purposes
-      similarity = Math.min(1, similarity + (Math.random() - 0.5) * 0.1);
-
-      if (similarity >= similarityThreshold) {
-        similarityPairs.push({
-          node1: node1Id,
-          node2: node2Id,
-          score: similarity,
-          node1Data: node1,
-          node2Data: node2
-        });
-      }
-    }
-  }
-
-  // Sort by score and limit to topK
-  similarityPairs.sort((a, b) => b.score - a.score);
-  const results = similarityPairs.slice(0, topK);
+  console.log('[Similarity] JS pairs found:', results.length);
 
   return {
     algorithmType: ALGORITHM_TYPES.NODE_SIMILARITY,
-    projectionName,
-    config,
+    projectionName, config,
     executedAt: new Date().toISOString(),
-    resultCount: results.length,
-    results,
+    resultCount: results.length, results,
     stats: {
-      nodesCompared: filteredNodes.length,
-      pairsEvaluated: (filteredNodes.length * (filteredNodes.length - 1)) / 2,
-      similarityMetric,
-      threshold: similarityThreshold
-    }
+      nodesCompared: candidates.length,
+      pairsEvaluated: pairs.length,
+      similarityMode,
+      gdsMetric,
+      targetNodeLabel: targetNodeLabel || 'all',
+      targetProperties: targetProperties.length > 0 ? targetProperties : 'all',
+      threshold: similarityThreshold,
+    },
   };
 };
 
+// --- Shortest Path ----------------------------------------------------------------
+
 /**
- * Run Shortest Path algorithm
- * @param {string} projectionName - The GDS projection name
- * @param {Object} config - Algorithm configuration
- * @returns {Promise<Object>} Algorithm results
+ * Run shortest-path on Neo4j GDS.
+ * algorithm: 'dijkstra' | 'astar' | 'yens'
  */
 export const runShortestPath = async (projectionName, config) => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 800));
-
+  console.log('[GDS] runShortestPath called:', { projectionName, config });
   const projection = activeProjections.get(projectionName);
   if (!projection) {
+    console.error('[GDS] Projection not found in registry. Available:', Array.from(activeProjections.keys()));
     throw new Error(`Projection ${projectionName} not found`);
   }
 
-  console.log(`[GDS Service] Running Shortest Path on ${projectionName}`, config);
-
-  const { nodes, relationships } = projection;
-  const {
-    sourceNode,
-    targetNode,
-    algorithm = 'dijkstra',
-    weightProperty = '',
-    relationshipFilter = [],
-    maxDepth = 10,
-    kPaths = 1
-  } = config;
-
-  if (!sourceNode || !targetNode) {
-    throw new Error('Source and target nodes are required');
-  }
+  const { sourceNode, targetNode } = config;
+  if (!sourceNode || !targetNode) throw new Error('Source and target nodes are required');
 
   if (sourceNode === targetNode) {
     return {
       algorithmType: ALGORITHM_TYPES.SHORTEST_PATH,
-      projectionName,
-      config,
+      projectionName, config,
       executedAt: new Date().toISOString(),
-      resultCount: 0,
-      results: [],
-      stats: {
-        pathsFound: 0,
-        message: 'Source and target nodes are the same'
-      }
+      resultCount: 0, results: [],
+      stats: { pathsFound: 0, message: 'Source and target nodes are the same' },
     };
   }
 
-  // Build adjacency list
-  const graph = new Map();
-  nodes.forEach(node => {
-    graph.set(node.id, []);
-  });
+  const {
+    algorithm = 'dijkstra',
+    weightProperty = '',
+    maxDepth = 10,
+    kPaths = 1,
+  } = config;
 
-  relationships.forEach(rel => {
-    if (relationshipFilter.length === 0 || relationshipFilter.includes(rel.type)) {
-      const weight = weightProperty && rel.properties?.[weightProperty]
-        ? rel.properties[weightProperty]
-        : 1;
+  const { nodes, relationships } = projection;
+  const driver = initDriver();
+  const session = driver.session({ database: NEO4J_DATABASE });
+  const weightClause = weightProperty ? `, relationshipWeightProperty: $weightProp` : '';
 
-      graph.get(rel.startNode)?.push({
-        to: rel.endNode,
-        weight,
-        relationshipId: rel.id,
-        type: rel.type
-      });
+  try {
+    let records = [];
 
-      // For undirected traversal (most common in GDS)
-      graph.get(rel.endNode)?.push({
-        to: rel.startNode,
-        weight,
-        relationshipId: rel.id,
-        type: rel.type
-      });
+    if (algorithm === 'yens') {
+      const result = await session.run(
+        `MATCH (source) WHERE id(source) = toInteger($sourceId)
+         MATCH (target) WHERE id(target) = toInteger($targetId)
+         CALL gds.kShortestPaths.yens.stream($projName, {
+           sourceNode: source,
+           targetNode: target,
+           k: $kPaths
+           ${weightClause}
+         })
+         YIELD index, nodeIds, totalCost
+         RETURN index, [nid IN nodeIds | toString(nid)] AS nodeIds, totalCost
+         ORDER BY index`,
+        { sourceId: sourceNode, targetId: targetNode, projName: projectionName, kPaths: neo4j.int(kPaths), weightProp: weightProperty }
+      );
+      records = result.records;
+    } else if (algorithm === 'astar') {
+      const result = await session.run(
+        `MATCH (source) WHERE id(source) = toInteger($sourceId)
+         MATCH (target) WHERE id(target) = toInteger($targetId)
+         CALL gds.shortestPath.astar.stream($projName, {
+           sourceNode: source,
+           targetNode: target,
+           latitudeProperty: 'latitude',
+           longitudeProperty: 'longitude'
+           ${weightClause}
+         })
+         YIELD index, nodeIds, totalCost
+         RETURN index, [nid IN nodeIds | toString(nid)] AS nodeIds, totalCost
+         ORDER BY index`,
+        { sourceId: sourceNode, targetId: targetNode, projName: projectionName, weightProp: weightProperty }
+      );
+      records = result.records;
+    } else {
+      // Dijkstra (default)
+      const result = await session.run(
+        `MATCH (source) WHERE id(source) = toInteger($sourceId)
+         MATCH (target) WHERE id(target) = toInteger($targetId)
+         CALL gds.shortestPath.dijkstra.stream($projName, {
+           sourceNode: source,
+           targetNodes: [target]
+           ${weightClause}
+         })
+         YIELD index, nodeIds, totalCost
+         RETURN index, [nid IN nodeIds | toString(nid)] AS nodeIds, totalCost
+         ORDER BY index`,
+        { sourceId: sourceNode, targetId: targetNode, projName: projectionName, weightProp: weightProperty }
+      );
+      records = result.records;
     }
-  });
 
-  // Run Dijkstra's algorithm (mock implementation)
-  const paths = findShortestPaths(graph, sourceNode, targetNode, maxDepth, kPaths);
-
-  const results = paths.map(path => {
-    const nodeIds = path.nodes;
-    const relationshipIds = path.relationships;
-    const pathNodes = nodeIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
-    const pathRels = relationshipIds.map(id =>
-      relationships.find(r => r.id === id)
-    ).filter(Boolean);
+    const results = records.map(rec =>
+      _buildPathResult(
+        rec.get('nodeIds'),
+        toNum(rec.get('totalCost')),
+        sourceNode, targetNode,
+        nodes, relationships
+      )
+    );
 
     return {
-      sourceNode,
-      targetNode,
-      nodeIds,
-      relationshipIds,
-      nodes: pathNodes,
-      relationships: pathRels,
-      pathLength: nodeIds.length - 1,
-      totalCost: path.cost,
-      pathDescription: nodeIds.map(id => {
-        const node = nodes.find(n => n.id === id);
-        return node?.properties?.name || id;
-      }).join(' → ')
+      algorithmType: ALGORITHM_TYPES.SHORTEST_PATH,
+      projectionName, config,
+      executedAt: new Date().toISOString(),
+      resultCount: results.length, results,
+      stats: { pathsFound: results.length, algorithm, weighted: !!weightProperty, maxDepth },
     };
-  });
+  } finally {
+    await session.close();
+  }
+};
+
+// Reconstruct a path result object from GDS-returned node-ID strings
+const _buildPathResult = (nodeIds, totalCost, sourceNode, targetNode, nodes, relationships) => {
+  const pathNodes = nodeIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
+
+  const pathRelIds = [];
+  const pathRels   = [];
+  for (let i = 0; i < nodeIds.length - 1; i++) {
+    const rel = relationships.find(r =>
+      (r.startNode === nodeIds[i] && r.endNode === nodeIds[i + 1]) ||
+      (r.startNode === nodeIds[i + 1] && r.endNode === nodeIds[i])
+    );
+    if (rel) { pathRelIds.push(rel.id); pathRels.push(rel); }
+  }
 
   return {
-    algorithmType: ALGORITHM_TYPES.SHORTEST_PATH,
-    projectionName,
-    config,
-    executedAt: new Date().toISOString(),
-    resultCount: results.length,
-    results,
-    stats: {
-      pathsFound: results.length,
-      algorithm,
-      weighted: !!weightProperty,
-      maxDepth
-    }
+    sourceNode, targetNode,
+    nodeIds,
+    relationshipIds: pathRelIds,
+    nodes: pathNodes,
+    relationships: pathRels,
+    pathLength: nodeIds.length - 1,
+    totalCost,
+    pathDescription: pathNodes.map(n =>
+      n.properties?.site_name || n.properties?.name || n.id
+    ).join(' -> '),
   };
 };
 
-/**
- * Helper function to find shortest paths using a simplified Dijkstra's algorithm
- * @param {Map} graph - Adjacency list representation
- * @param {string} start - Start node ID
- * @param {string} end - End node ID
- * @param {number} maxDepth - Maximum path length
- * @param {number} k - Number of paths to find
- * @returns {Array} Array of paths
- */
-function findShortestPaths(graph, start, end, maxDepth, k = 1) {
-  const paths = [];
-  const queue = [{ node: start, cost: 0, path: [start], relationships: [] }];
-  const visited = new Set();
+// --- Projection teardown ----------------------------------------------------------
 
-  while (queue.length > 0 && paths.length < k) {
-    queue.sort((a, b) => a.cost - b.cost);
-    const current = queue.shift();
-
-    if (current.path.length > maxDepth) continue;
-
-    const stateKey = `${current.node}-${current.path.length}`;
-    if (visited.has(stateKey)) continue;
-    visited.add(stateKey);
-
-    if (current.node === end) {
-      paths.push({
-        nodes: current.path,
-        relationships: current.relationships,
-        cost: current.cost
-      });
-      continue;
-    }
-
-    const neighbors = graph.get(current.node) || [];
-    for (const neighbor of neighbors) {
-      if (!current.path.includes(neighbor.to)) {
-        queue.push({
-          node: neighbor.to,
-          cost: current.cost + neighbor.weight,
-          path: [...current.path, neighbor.to],
-          relationships: [...current.relationships, neighbor.relationshipId]
-        });
-      }
-    }
-  }
-
-  return paths;
-}
-
-/**
- * Drop a GDS projection
- * @param {string} projectionName - The projection name
- * @returns {Promise<Object>} Result of the drop operation
- */
 export const dropGdsProjection = async (projectionName) => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 300));
-
   if (!activeProjections.has(projectionName)) {
     throw new Error(`Projection ${projectionName} not found`);
   }
 
-  activeProjections.delete(projectionName);
+  const driver = initDriver();
+  const session = driver.session({ database: NEO4J_DATABASE });
+  try {
+    await session.run('CALL gds.graph.drop($name, false) YIELD graphName', { name: projectionName });
+  } finally {
+    await session.close();
+  }
 
-  console.log(`[GDS Service] Dropped projection: ${projectionName}`);
+  activeProjections.delete(projectionName);
 
   return {
     projectionName,
     dropped: true,
-    droppedAt: new Date().toISOString()
+    droppedAt: new Date().toISOString(),
   };
 };
 
-/**
- * Get all active projections
- * @returns {Array} List of active projection names
- */
-export const getActiveProjections = () => {
-  return Array.from(activeProjections.keys());
-};
+export const getActiveProjections = () => Array.from(activeProjections.keys());
 
-/**
- * Clear all projections (for testing)
- * @returns {number} Number of projections cleared
- */
 export const clearAllProjections = () => {
   const count = activeProjections.size;
   activeProjections.clear();
-  console.log(`[GDS Service] Cleared all projections (${count})`);
   return count;
 };

@@ -1,4 +1,3 @@
-import { fetchGraphData } from './neo4jService';
 
 // Hardcoded query mapping for POC - Forxiga Supply Chain
 // Aligned with Dashboard Service query types
@@ -164,21 +163,21 @@ ORDER BY n.site_name`,
   },
 
   'which forxiga supply chain nodes are located in india and how many materials do they handle': {
-    query: `MATCH (n)
+    query: `MATCH (n {brand: 'forxiga'})
 WHERE n.site_country_name = 'India' OR n.countryname = 'India'
-OPTIONAL MATCH (n)-[:HAS_MATERIAL]->(m:Material)
-OPTIONAL MATCH (n)-[r:SUPPLIES_TO]-(connected)
-RETURN n, m, r, connected
+OPTIONAL MATCH (n)-[h:HAS_MATERIAL {brand: 'forxiga'}]->(m:Material {brand: 'forxiga'})
+OPTIONAL MATCH (n)-[r:SUPPLIES_TO {brand: 'forxiga'}]-(connected {brand: 'forxiga'})
+RETURN n, m, r, connected, h
 ORDER BY n.site_name`,
     description: 'Fetching all India supply chain nodes (13 sites, 99 materials total)',
     dashboardType: 'supply-chain'
   },
 
   'which suppliers provide forxiga api materials and how many sources exist per material': {
-    query: `MATCH (api:API)
-OPTIONAL MATCH (api)-[:HAS_MATERIAL]->(m:Material)
-WHERE m.material_description CONTAINS 'Dapagliflozin'
-OPTIONAL MATCH (api)-[r:SUPPLIES_TO]->(downstream)
+    query: `MATCH (api:API {brand: 'forxiga'})
+OPTIONAL MATCH (api)-[:HAS_MATERIAL {brand: 'forxiga'}]->(m:Material {brand: 'forxiga'})
+WHERE m.material_name CONTAINS 'Dapagliflozin' OR m.material_type_name CONTAINS 'Dapagliflozin'
+OPTIONAL MATCH (api)-[r:SUPPLIES_TO {brand: 'forxiga'}]->(downstream {brand: 'forxiga'})
 RETURN api, m, r, downstream
 ORDER BY api.site_name`,
     description: 'Identifying API suppliers: Lonza, SK Biotek, Dottikon, BASF, Siegfried (4-6 sources per material)',
@@ -186,24 +185,34 @@ ORDER BY api.site_name`,
   },
 
   'which forxiga packing sites handle more than 30 materials': {
-    query: `MATCH (packing:Packing)
-OPTIONAL MATCH (packing)-[:HAS_MATERIAL]->(m:Material)
+    query: `MATCH (packing:Packing {brand: 'forxiga'})
+OPTIONAL MATCH (packing)-[:HAS_MATERIAL]->(m:Material {brand: 'forxiga'})
 WITH packing, count(DISTINCT m) as materialCount, collect(m) as materials
 WHERE materialCount > 30
-OPTIONAL MATCH (packing)-[r:SUPPLIES_TO]-(connected)
+OPTIONAL MATCH (packing)-[r:SUPPLIES_TO {brand: 'forxiga'}]-(connected {brand: 'forxiga'})
 RETURN packing, materials, r, connected, materialCount
 ORDER BY materialCount DESC`,
     description: 'High-volume packing sites: SE Snäckviken (78), Macclesfield (48), Mt Vernon (40), Japan (41), China (35)',
     dashboardType: 'formulation-sites'
   },
 
+  'which forxiga sites have the highest number of materials and how many does each site handle': {
+    query: `MATCH (n {brand: 'forxiga'})-[h:HAS_MATERIAL {brand: 'forxiga'}]->(m:Material {brand: 'forxiga'})
+WITH n, COUNT(DISTINCT m) as materialCount, collect(DISTINCT m) as materials
+OPTIONAL MATCH (n)-[r:SUPPLIES_TO {brand: 'forxiga'}]-(connected {brand: 'forxiga'})
+RETURN n, materials, r, connected, materialCount, h
+ORDER BY materialCount DESC`,
+    description: 'Ranking all Forxiga sites by material count: Mt Vernon (123), SE Snäckviken (103), Macclesfield (48)',
+    dashboardType: 'material-count'
+  },
+
   // === TOP 3 EXECUTIVE BUSINESS QUESTIONS ===
 
   'where can we save $15-25M annually in the forxiga supply chain': {
-    query: `MATCH (n)
+    query: `MATCH (n {brand: 'forxiga'})
 WHERE n:Formulation OR n:Packing OR n:Distribution_Hub
-OPTIONAL MATCH (n)-[:HAS_MATERIAL]->(m:Material)
-OPTIONAL MATCH (n)-[:HAS_PRODUCTION_DATA]->(prod:ProductionDataPoints)
+OPTIONAL MATCH (n)-[:HAS_MATERIAL {brand: 'forxiga'}]->(m:Material {brand: 'forxiga'})
+OPTIONAL MATCH (n)-[:HAS_PRODUCTION_DATA {brand: 'forxiga'}]->(prod:ProductionDataPoints {brand: 'forxiga'})
 WITH n, labels(n)[0] as nodeType, count(DISTINCT m) as materialCount, prod
 RETURN n, nodeType, materialCount, prod
 ORDER BY materialCount DESC`,
@@ -212,12 +221,12 @@ ORDER BY materialCount DESC`,
   },
 
   'what are the biggest supply chain risks threatening forxiga production': {
-    query: `MATCH (critical)
+    query: `MATCH (critical {brand: 'forxiga'})
 WHERE (critical.site_name = 'Mt Vernon' OR critical.site_name = 'Macclesfield Works' OR critical.site_name CONTAINS 'Snäckviken')
   AND (critical:Formulation OR critical:Packing)
-OPTIONAL MATCH (critical)-[:HAS_MATERIAL]->(m:Material)
-OPTIONAL MATCH (critical)<-[r:SUPPLIES_TO]-(supplier)
-OPTIONAL MATCH (critical)-[:SUPPLIES_TO]->(downstream)
+OPTIONAL MATCH (critical)-[:HAS_MATERIAL {brand: 'forxiga'}]->(m:Material {brand: 'forxiga'})
+OPTIONAL MATCH (critical)<-[r:SUPPLIES_TO {brand: 'forxiga'}]-(supplier {brand: 'forxiga'})
+OPTIONAL MATCH (critical)-[:SUPPLIES_TO {brand: 'forxiga'}]->(downstream {brand: 'forxiga'})
 RETURN critical, m, r, supplier, downstream`,
     description: 'Critical risks identified: Mt Vernon at 85-90% capacity (206 materials, CRITICAL bottleneck), Macclesfield 384 criticality score (8 suppliers, VERY HIGH risk), SE Snäckviken 17 downstream connections (single-point-of-failure)',
     dashboardType: 'formulation-sites'
@@ -451,7 +460,67 @@ The following FORXIGA products are distributed across **11-13 locations in India
 🔬 **The graph shows API suppliers (blue nodes) with their downstream connections to formulation sites, highlighting the Europe→Global flow pattern.**`;
   }
 
-  // Q4: High-Volume Packing Sites (>30 materials)
+  // Q4: Sites with Highest Material Counts
+  if (normalizedQ.includes('highest number of materials') || (normalizedQ.includes('sites') && normalizedQ.includes('materials') && normalizedQ.includes('handle'))) {
+    return `## 📊 Forxiga Sites Ranked by Material Count
+
+**TOP 10 SITES BY MATERIAL VOLUME:**
+
+**#1: Mt Vernon (United States) - 123 Materials**
+- **Type:** Formulation + Packing (Dual Role)
+- **Status:** CRITICAL - Highest material volume globally
+- **Capacity:** 85-90% utilization
+- **Role:** North America primary manufacturing hub
+
+**#2: SE Snäckviken/Gärtuna (Sweden) - 103 Materials**
+- **Type:** Formulation + Packing + Distribution
+- **Status:** HIGH - Second highest volume
+- **Capacity:** 80-85% utilization
+- **Role:** Primary EMEA distribution center
+
+**#3: UK Macclesfield Works (United Kingdom) - 48 Materials**
+- **Type:** Packing
+- **Status:** GOOD
+- **Capacity:** 70-75% utilization
+- **Role:** UK/EMEA packing operations
+
+**#4: AstraZeneca K.K. (Japan) - 41 Materials**
+- **Type:** Packing
+- **Capacity:** 65-70% utilization
+- **Role:** Primary APAC packing facility
+
+**#5: AstraZeneca Pharma Co., Ltd. (China) - 35 Materials**
+- **Type:** Packing
+- **Role:** China local-for-local operations
+
+**#6: Hungary 3PL - UPS - 31 Materials**
+- **Type:** Distribution/3PL
+- **Role:** European distribution hub
+
+**#7-9: Mexico & US Sites - 18 Materials each**
+- Planta Lomas Verdes (Mexico)
+- Newark PLP (United States)
+- AstraZeneca do Brasil Ltda. (Brazil)
+
+**#10: Multiple Sites - 15-17 Materials**
+- AstraZeneca China Taizhou: 17 materials
+- Centro de Distribucion 2000: 16 materials
+- AstraZeneca Industries LLC: 16 materials
+- GES CM SE Sweden: 15 materials
+
+**INDIA DISTRIBUTION NETWORK (13 sites, 8-9 materials each):**
+The India network shows consistent distribution with multiple sites handling 8-9 materials each, indicating a well-distributed regional network.
+
+**KEY INSIGHTS:**
+- **Top 2 sites (Mt Vernon + SE Snäckviken) handle 226 materials combined** (18% of all materials)
+- **Geographic concentration:** Top sites located in US, Europe, and APAC
+- **Material distribution range:** 1-123 materials per site (high variance)
+- **Regional hubs identified:** North America (Mt Vernon), EMEA (SE Snäckviken), APAC (Japan, China)
+
+📍 **The graph shows all sites sized by material count, with the largest nodes representing the highest-volume sites.**`;
+  }
+
+  // Q5: High-Volume Packing Sites (>30 materials)
   if (normalizedQ.includes('packing') && normalizedQ.includes('30')) {
     return `## 📦 High-Volume Packing Sites (>30 Materials)
 
@@ -759,19 +828,19 @@ export const processChatQuery = async (userQuestion) => {
 const executeCustomQuery = async (cypherQuery) => {
   const neo4j = require('neo4j-driver');
 
-  const NEO4J_CONFIG = {
-    uri: 'bolt://localhost:7687',
-    username: 'neo4j',
-    password: '14071407',
-    database: 'test'
+  const config = {
+    uri: process.env.REACT_APP_NEO4J_URI || 'bolt://localhost:7687',
+    username: process.env.REACT_APP_NEO4J_USERNAME || 'neo4j',
+    password: process.env.REACT_APP_NEO4J_PASSWORD || '',
+    database: process.env.REACT_APP_NEO4J_DATABASE || 'neo4j'
   };
 
   const driver = neo4j.driver(
-    NEO4J_CONFIG.uri,
-    neo4j.auth.basic(NEO4J_CONFIG.username, NEO4J_CONFIG.password)
+    config.uri,
+    neo4j.auth.basic(config.username, config.password)
   );
 
-  const session = driver.session({ database: NEO4J_CONFIG.database });
+  const session = driver.session({ database: config.database });
 
   try {
     const result = await session.run(cypherQuery);

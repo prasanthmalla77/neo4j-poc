@@ -1,37 +1,37 @@
-import React, { useState, useEffect } from 'react';
-import { getAlgorithmConfig, populateDynamicOptions, validateAlgorithmConfig, getDefaultConfig } from '../data/algorithmConfigs';
+import React, { useState, useMemo } from 'react';
+import { populateDynamicOptions, validateAlgorithmConfig, getDefaultConfig } from '../data/algorithmConfigs';
 import './AlgorithmPanel.css';
 
 const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting }) => {
   const [selectedAlgorithm, setSelectedAlgorithm] = useState('');
   const [config, setConfig] = useState({});
-  const [algorithmConfig, setAlgorithmConfig] = useState(null);
   const [validationErrors, setValidationErrors] = useState([]);
 
-  // Update algorithm config when selection changes
-  useEffect(() => {
-    if (selectedAlgorithm) {
-      const baseConfig = getAlgorithmConfig(selectedAlgorithm);
-      const configWithOptions = populateDynamicOptions(selectedAlgorithm, graphData);
-      setAlgorithmConfig(configWithOptions);
-      setConfig(getDefaultConfig(selectedAlgorithm));
-      setValidationErrors([]);
-    } else {
-      setAlgorithmConfig(null);
-      setConfig({});
-    }
-  }, [selectedAlgorithm, graphData]);
+  // Derive the algorithm schema + dynamic options synchronously.
+  // useMemo means this always reflects latest graphData and config.targetNodeLabel
+  // WITHOUT any useEffect that could accidentally reset config values.
+  const algorithmConfig = useMemo(() => {
+    if (!selectedAlgorithm || !graphData?.nodes) return null;
+    return populateDynamicOptions(selectedAlgorithm, graphData, config);
+  // config must be in deps so property options refresh when targetNodeLabel changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAlgorithm, graphData, config.targetNodeLabel]);
 
   const handleAlgorithmChange = (e) => {
-    setSelectedAlgorithm(e.target.value);
+    const algo = e.target.value;
+    setSelectedAlgorithm(algo);
+    // Config reset only here — the ONLY place it should ever reset
+    setConfig(algo ? getDefaultConfig(algo) : {});
+    setValidationErrors([]);
   };
 
   const handleConfigChange = (paramKey, value) => {
-    setConfig(prev => ({
-      ...prev,
-      [paramKey]: value
-    }));
-    // Clear validation errors when user makes changes
+    if (paramKey === 'targetNodeLabel') {
+      // Clear previously selected properties when label changes
+      setConfig(prev => ({ ...prev, [paramKey]: value, targetProperties: [] }));
+    } else {
+      setConfig(prev => ({ ...prev, [paramKey]: value }));
+    }
     setValidationErrors([]);
   };
 

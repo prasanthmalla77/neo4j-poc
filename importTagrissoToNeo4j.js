@@ -9,7 +9,7 @@ const NEO4J_CONFIG = {
 };
 
 // Brand configuration
-const BRAND = 'forxiga';
+const BRAND = 'tagrisso';
 
 const driver = neo4j.driver(
     NEO4J_CONFIG.uri,
@@ -43,10 +43,10 @@ async function ensureDatabaseExists() {
     }
 }
 
-async function clearForxigaData(session) {
-    console.log('Clearing existing Forxiga data...');
+async function clearTagrissoData(session) {
+    console.log('Clearing existing Tagrisso data...');
     await session.run('MATCH (n {brand: $brand}) DETACH DELETE n', { brand: BRAND });
-    console.log('Forxiga data cleared.');
+    console.log('Tagrisso data cleared.');
 }
 
 async function createMainNode(session, node) {
@@ -108,7 +108,7 @@ async function createMaterialNodes(session, mainNodeId, materials) {
 
     for (const material of materials) {
         const query = `
-            MATCH (main {id: $mainNodeId})
+            MATCH (main {id: $mainNodeId, brand: $brand})
             CREATE (m:Material {
                 brand: $brand,
                 material_code: $material_code,
@@ -142,7 +142,7 @@ async function createMaterialLocationNodes(session, mainNodeId, materialLocation
 
     for (const location of materialLocations) {
         const query = `
-            MATCH (m:Material {material_code: $material_code, plant_code: $plant_code})
+            MATCH (m:Material {material_code: $material_code, plant_code: $plant_code, brand: $brand})
             CREATE (ml:MaterialLocation {
                 brand: $brand,
                 material_identifier: $material_identifier,
@@ -226,7 +226,7 @@ async function createInventoryDataPoints(session, mainNodeId, dataPoints) {
     if (!dataPoints) return;
 
     const query = `
-        MATCH (main {id: $mainNodeId})
+        MATCH (main {id: $mainNodeId, brand: $brand})
         CREATE (idp:InventoryDataPoints {
             brand: $brand,
             inventory_days_covered_API: $inventory_days_covered_API,
@@ -270,7 +270,7 @@ async function createProductionDataPoints(session, mainNodeId, dataPoints) {
     if (!dataPoints) return;
 
     const query = `
-        MATCH (main {id: $mainNodeId})
+        MATCH (main {id: $mainNodeId, brand: $brand})
         CREATE (pdp:ProductionDataPoints {
             brand: $brand,
             production_budget: $production_budget,
@@ -296,7 +296,7 @@ async function createCustomerDataPoints(session, mainNodeId, dataPoints) {
     if (!dataPoints) return;
 
     const query = `
-        MATCH (main {id: $mainNodeId})
+        MATCH (main {id: $mainNodeId, brand: $brand})
         CREATE (cdp:CustomerDataPoints {
             brand: $brand,
             customer_name: $customer_name,
@@ -331,7 +331,7 @@ async function createMaterialsPerMarket(session, mainNodeId, materialsPerMarket)
 
     for (const marketData of materialsPerMarket) {
         const query = `
-            MATCH (main {id: $mainNodeId})
+            MATCH (main {id: $mainNodeId, brand: $brand})
             CREATE (mpm:MaterialsPerMarket {
                 brand: $brand,
                 market_name: $market_name,
@@ -365,8 +365,8 @@ async function createNodeConnections(session, sourceNodeId, connections) {
 
     for (const targetNodeId of connections) {
         const query = `
-            MATCH (source {id: $sourceNodeId})
-            MATCH (target {id: $targetNodeId})
+            MATCH (source {id: $sourceNodeId, brand: $brand})
+            MATCH (target {id: $targetNodeId, brand: $brand})
             CREATE (source)-[:SUPPLIES_TO {brand: $brand}]->(target)
         `;
 
@@ -393,54 +393,55 @@ async function importData() {
 
         try {
             // Read JSON file
-            console.log('Reading forxiga.json...');
-            const data = JSON.parse(fs.readFileSync('forxiga.json', 'utf8'));
+            console.log('Reading tagrisso.json...');
+            const data = JSON.parse(fs.readFileSync('tagrisso.json', 'utf8'));
 
-            // Clear existing Forxiga data only
-            await clearForxigaData(session);
+            // Clear existing Tagrisso data only
+            await clearTagrissoData(session);
 
-        // Process each node - Create all nodes first
-        console.log(`Processing ${data.node_list.length} nodes...`);
+            // Process each node - Create all nodes first
+            console.log(`Processing ${data.node_list.length} Tagrisso nodes...`);
 
-        for (let i = 0; i < data.node_list.length; i++) {
-            const node = data.node_list[i];
-            console.log(`\n[${i + 1}/${data.node_list.length}] Processing ${node.id}...`);
+            for (let i = 0; i < data.node_list.length; i++) {
+                const node = data.node_list[i];
+                console.log(`\n[${i + 1}/${data.node_list.length}] Processing ${node.id}...`);
 
-            // Create main node
-            await createMainNode(session, node);
+                // Create main node
+                await createMainNode(session, node);
 
-            // Create material nodes
-            await createMaterialNodes(session, node.id, node.materials);
+                // Create material nodes
+                await createMaterialNodes(session, node.id, node.materials);
 
-            // Create material location nodes
-            await createMaterialLocationNodes(session, node.id, node.material_locations);
+                // Create material location nodes
+                await createMaterialLocationNodes(session, node.id, node.material_locations);
 
-            // Create inventory data points
-            await createInventoryDataPoints(session, node.id, node.data_points_inventory);
+                // Create inventory data points
+                await createInventoryDataPoints(session, node.id, node.data_points_inventory);
 
-            // Create production data points
-            await createProductionDataPoints(session, node.id, node.data_points_production);
+                // Create production data points
+                await createProductionDataPoints(session, node.id, node.data_points_production);
 
-            // Create customer data points
-            await createCustomerDataPoints(session, node.id, node.data_points_customer);
+                // Create customer data points
+                await createCustomerDataPoints(session, node.id, node.data_points_customer);
 
-            // Create materials per market
-            await createMaterialsPerMarket(session, node.id, node.materials_per_market);
-        }
-
-        // Now create all connections between nodes
-        console.log('\n\nCreating connections between nodes...');
-        for (let i = 0; i < data.node_list.length; i++) {
-            const node = data.node_list[i];
-            if (node.connections && node.connections.length > 0) {
-                await createNodeConnections(session, node.id, node.connections);
+                // Create materials per market nodes
+                await createMaterialsPerMarket(session, node.id, node.materials_per_market);
             }
-        }
 
-            console.log('\n✓ Import completed successfully!');
+            // Now create all connections between nodes
+            console.log('\n\nCreating connections between Tagrisso nodes...');
+            for (let i = 0; i < data.node_list.length; i++) {
+                const node = data.node_list[i];
+                if (node.connections && node.connections.length > 0) {
+                    await createNodeConnections(session, node.id, node.connections);
+                }
+            }
+
+            console.log('\n✓ Tagrisso import completed successfully!');
+            console.log(`✓ Total Tagrisso nodes: ${data.node_list.length}`);
 
         } catch (error) {
-            console.error('Error during import:', error);
+            console.error('Error during Tagrisso import:', error);
         } finally {
             await session.close();
         }

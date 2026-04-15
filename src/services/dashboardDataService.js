@@ -1,10 +1,10 @@
 import neo4j from 'neo4j-driver';
 
 const NEO4J_CONFIG = {
-  uri: 'bolt://localhost:7687',
-  username: 'neo4j',
-  password: '14071407',
-  database: 'test'
+  uri: process.env.REACT_APP_NEO4J_URI || 'bolt://localhost:7687',
+  username: process.env.REACT_APP_NEO4J_USERNAME || 'neo4j',
+  password: process.env.REACT_APP_NEO4J_PASSWORD || '',
+  database: process.env.REACT_APP_NEO4J_DATABASE || 'neo4j'
 };
 
 let driver = null;

@@ -3,12 +3,12 @@
 
 import neo4j from 'neo4j-driver';
 
-// Neo4j connection configuration
+// Neo4j connection configuration — loaded from environment variables (.env.local)
 const NEO4J_CONFIG = {
-  uri: 'bolt://localhost:7687',
-  username: 'neo4j',
-  password: '14071407', // Updated with your Neo4j password
-  database: 'test'
+  uri: process.env.REACT_APP_NEO4J_URI || 'bolt://localhost:7687',
+  username: process.env.REACT_APP_NEO4J_USERNAME || 'neo4j',
+  password: process.env.REACT_APP_NEO4J_PASSWORD || '',
+  database: process.env.REACT_APP_NEO4J_DATABASE || 'neo4j'
 };
 
 let driver = null;
@@ -42,7 +42,7 @@ export const testConnection = async () => {
     const driver = initDriver();
     const session = driver.session();
 
-    const result = await session.run('RETURN 1 as test');
+    await session.run('RETURN 1 as test');
     await session.close();
 
     console.log('[Neo4j Service] Connection successful');
@@ -54,21 +54,38 @@ export const testConnection = async () => {
 };
 
 /**
- * Fetch filtered graph data from Neo4j with specific node labels and relationship types
+ * Fetch filtered graph data from Neo4j with specific node labels, relationship types, and brands
  * @param {String} jobId - Job identifier
  * @param {Array<String>} nodeLabels - Array of node labels to fetch (e.g., ['Drug', 'Country'])
  * @param {Array<String>} relationshipTypes - Array of relationship types to fetch (e.g., ['APPROVED_IN'])
+ * @param {Array<String>} brands - Array of brands to filter (e.g., ['forxiga', 'tagrisso'])
  * @returns {Promise<Object>} Filtered job data
  */
-export const fetchFilteredGraphData = async (jobId = 'neo4j_job_001', nodeLabels = [], relationshipTypes = []) => {
+export const fetchFilteredGraphData = async (jobId = 'neo4j_job_001', nodeLabels = [], relationshipTypes = [], brands = []) => {
   const driver = initDriver();
   const session = driver.session({ database: NEO4J_CONFIG.database });
 
   try {
     let nodesResult, relsResult;
 
-    if (nodeLabels.length === 0) {
-      // If no labels specified, fetch all nodes
+    // Build WHERE conditions
+    const whereConditions = [];
+
+    // Add label conditions
+    if (nodeLabels.length > 0) {
+      const labelConditions = nodeLabels.map(label => `'${label}' IN labels(n)`).join(' OR ');
+      whereConditions.push(`(${labelConditions})`);
+    }
+
+    // Add brand conditions
+    if (brands.length > 0) {
+      const brandConditions = brands.map(brand => `n.brand = '${brand}'`).join(' OR ');
+      whereConditions.push(`(${brandConditions})`);
+    }
+
+    // Fetch nodes
+    if (whereConditions.length === 0) {
+      // If no filters specified, fetch all nodes
       nodesResult = await session.run(`
         MATCH (n)
         RETURN
@@ -77,12 +94,11 @@ export const fetchFilteredGraphData = async (jobId = 'neo4j_job_001', nodeLabels
           properties(n) as properties
       `);
     } else {
-      // Build WHERE clause for multiple labels using OR
-      const labelConditions = nodeLabels.map((label, idx) => `'${label}' IN labels(n)`).join(' OR ');
-
+      // Apply filters
+      const whereClause = whereConditions.join(' AND ');
       nodesResult = await session.run(`
         MATCH (n)
-        WHERE ${labelConditions}
+        WHERE ${whereClause}
         RETURN
           id(n) as id,
           labels(n) as labels,

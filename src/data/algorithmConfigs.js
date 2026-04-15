@@ -10,49 +10,48 @@ export const ALGORITHM_TYPES = {
 export const nodeSimilarityConfig = {
   id: 'nodeSimilarity',
   name: 'Node Similarity',
-  description: 'Computes similarity between nodes based on their neighborhoods and properties',
+  description: 'Computes similarity between nodes in the graph',
   category: 'similarity',
 
   // Configuration parameters
   parameters: {
-    similarityMetric: {
-      label: 'Similarity Metric',
+    similarityMode: {
+      label: 'Similarity Mode',
       type: 'select',
       required: true,
-      default: 'jaccard',
+      default: 'neighbours',
       options: [
         {
-          value: 'jaccard',
-          label: 'Jaccard',
-          description: 'Measures similarity as intersection over union of neighbors'
+          value: 'neighbours',
+          label: 'Similar Neighbours',
+          description: 'Finds nodes that share the most common connections (Jaccard on shared neighbors)'
         },
         {
-          value: 'overlap',
-          label: 'Overlap',
-          description: 'Measures similarity as intersection over minimum set size'
-        },
-        {
-          value: 'cosine',
-          label: 'Cosine',
-          description: 'Measures similarity using cosine of the angle between vectors'
-        },
-        {
-          value: 'pearson',
-          label: 'Pearson',
-          description: 'Measures linear correlation between nodes'
+          value: 'properties',
+          label: 'Similar Properties',
+          description: 'Finds nodes whose property feature vectors point in the same direction (Cosine similarity)'
         }
       ],
-      helpText: 'The metric used to compute similarity between nodes'
+      helpText: 'Choose how similarity is measured between nodes'
     },
 
-    topK: {
-      label: 'Top K Results',
-      type: 'number',
+    targetNodeLabel: {
+      label: 'Node Label to Compare',
+      type: 'select',
       required: true,
-      default: 10,
-      min: 1,
-      max: 100,
-      helpText: 'Number of most similar nodes to return for each node'
+      default: '',
+      options: [], // Populated dynamically from graph
+      helpText: 'Only nodes with this label will be compared'
+    },
+
+    targetProperties: {
+      label: 'Properties to Consider',
+      type: 'multiselect',
+      required: false,
+      default: [],
+      options: [], // Populated dynamically based on selected targetNodeLabel
+      helpText: 'Which node properties to match (leave empty = use all)',
+      showWhen: { similarityMode: 'properties' }
     },
 
     similarityThreshold: {
@@ -63,25 +62,7 @@ export const nodeSimilarityConfig = {
       min: 0,
       max: 1,
       step: 0.01,
-      helpText: 'Minimum similarity score (0-1) to include in results'
-    },
-
-    nodeFilter: {
-      label: 'Node Filter',
-      type: 'multiselect',
-      required: false,
-      default: [],
-      options: [], // Will be populated dynamically from available node labels
-      helpText: 'Filter by node labels (leave empty for all nodes)'
-    },
-
-    relationshipFilter: {
-      label: 'Relationship Types',
-      type: 'multiselect',
-      required: false,
-      default: [],
-      options: [], // Will be populated dynamically from available relationship types
-      helpText: 'Consider only these relationship types (leave empty for all)'
+      helpText: 'Minimum similarity score (0–1) to include in results'
     },
 
     degreeCutoff: {
@@ -90,18 +71,28 @@ export const nodeSimilarityConfig = {
       required: false,
       default: 1,
       min: 1,
-      helpText: 'Minimum number of relationships a node must have to be included'
+      helpText: 'Minimum number of relationships a node must have to be included',
+      showWhen: { similarityMode: 'neighbours' }
+    },
+
+    relationshipFilter: {
+      label: 'Relationship Types',
+      type: 'multiselect',
+      required: false,
+      default: [],
+      options: [], // Populated dynamically from graph
+      helpText: 'Consider only these relationship types when comparing neighbours (leave empty for all)'
     }
   },
 
   // Default configuration
   defaultConfig: {
-    similarityMetric: 'jaccard',
-    topK: 10,
+    similarityMode: 'neighbours',
+    targetNodeLabel: '',
+    targetProperties: [],
     similarityThreshold: 0.5,
-    nodeFilter: [],
-    relationshipFilter: [],
-    degreeCutoff: 1
+    degreeCutoff: 1,
+    relationshipFilter: []
   },
 
   // Expected output structure
@@ -269,8 +260,9 @@ export const validateAlgorithmConfig = (algorithmId, config) => {
   };
 };
 
-// Helper function to populate dynamic options (node labels, relationship types)
-export const populateDynamicOptions = (algorithmId, graphData) => {
+// Helper function to populate dynamic options (node labels, relationship types, per-label properties)
+// currentConfig is optional — used to derive property options for the currently selected node label
+export const populateDynamicOptions = (algorithmId, graphData, currentConfig = {}) => {
   const config = getAlgorithmConfig(algorithmId);
   if (!config) return config;
 
@@ -279,22 +271,35 @@ export const populateDynamicOptions = (algorithmId, graphData) => {
   // Extract unique node labels
   const nodeLabels = [...new Set(
     graphData.nodes.flatMap(node => node.labels)
-  )].map(label => ({
-    value: label,
-    label: label
-  }));
+  )].map(label => ({ value: label, label }));
 
   // Extract unique relationship types
   const relationshipTypes = [...new Set(
     graphData.relationships.map(rel => rel.type)
-  )].map(type => ({
-    value: type,
-    label: type
-  }));
+  )].map(type => ({ value: type, label: type }));
 
-  // Update options for node and relationship filters
+  // Build per-label property map: label -> sorted list of property keys
+  const labelPropertyMap = {};
+  graphData.nodes.forEach(node => {
+    (node.labels || []).forEach(lbl => {
+      if (!labelPropertyMap[lbl]) labelPropertyMap[lbl] = new Set();
+      Object.keys(node.properties || {}).forEach(k => labelPropertyMap[lbl].add(k));
+    });
+  });
+
   Object.keys(updatedConfig.parameters).forEach(key => {
     const param = updatedConfig.parameters[key];
+    if (key === 'targetNodeLabel') {
+      param.options = nodeLabels;
+    }
+    if (key === 'targetProperties') {
+      // Derive property options from the currently selected label
+      const selectedLabel = currentConfig.targetNodeLabel || '';
+      const propKeys = selectedLabel && labelPropertyMap[selectedLabel]
+        ? [...labelPropertyMap[selectedLabel]].sort()
+        : [...new Set(graphData.nodes.flatMap(n => Object.keys(n.properties || {})))].sort();
+      param.options = propKeys.map(k => ({ value: k, label: k }));
+    }
     if (param.type === 'multiselect' && key === 'nodeFilter') {
       param.options = nodeLabels;
     }
