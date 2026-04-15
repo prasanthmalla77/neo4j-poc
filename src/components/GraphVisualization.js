@@ -611,6 +611,7 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
 
           {algorithmResults && (
             <AlgorithmResults
+              key={algorithmResults.executedAt}
               results={algorithmResults}
               onHighlight={handleHighlight}
               onClearHighlight={handleClearHighlight}

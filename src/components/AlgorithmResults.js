@@ -1,10 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ALGORITHM_TYPES } from '../data/algorithmConfigs';
 import './AlgorithmResults.css';
 
 const AlgorithmResults = ({ results, onHighlight, onClearHighlight, onExport }) => {
   const [expandedItems, setExpandedItems] = useState(new Set());
   const isPropertiesMode = results?.stats?.similarityMode === 'properties';
+
+  // Reset expanded state every time a new result set arrives
+  useEffect(() => {
+    setExpandedItems(new Set());
+  }, [results?.executedAt]);
 
   // Helper function to safely convert Neo4j values to displayable strings
   const toDisplayValue = (value) => {
@@ -271,6 +276,28 @@ const AlgorithmResults = ({ results, onHighlight, onClearHighlight, onExport }) 
         </div>
 
         <div className="results-stats">
+          {(() => {
+            const firstPath = results.results?.[0];
+            const srcNode = firstPath?.nodes?.[0];
+            const tgtNode = firstPath?.nodes?.[firstPath.nodes.length - 1];
+            const nodeName = (n) => n?.properties?.site_name || n?.properties?.vendor_name || n?.properties?.id || n?.id || '—';
+            return (
+              <>
+                {srcNode && (
+                  <div className="stat-item">
+                    <span className="stat-label">Source:</span>
+                    <span className="stat-value">{nodeName(srcNode)} <small>({srcNode.labels?.[0]})</small></span>
+                  </div>
+                )}
+                {tgtNode && (
+                  <div className="stat-item">
+                    <span className="stat-label">Target:</span>
+                    <span className="stat-value">{nodeName(tgtNode)} <small>({tgtNode.labels?.[0]})</small></span>
+                  </div>
+                )}
+              </>
+            );
+          })()}
           <div className="stat-item">
             <span className="stat-label">Algorithm:</span>
             <span className="stat-value">{results.stats.algorithm}</span>

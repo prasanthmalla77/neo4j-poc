@@ -413,8 +413,8 @@ const _buildPathResult = (nodeIds, totalCost, sourceNode, targetNode, nodes, rel
     pathLength: nodeIds.length - 1,
     totalCost,
     pathDescription: pathNodes.map(n =>
-      n.properties?.site_name || n.properties?.name || n.id
-    ).join(' -> '),
+      n.properties?.site_name || n.properties?.vendor_name || n.properties?.id || n.id
+    ).join(' → '),
   };
 };
 

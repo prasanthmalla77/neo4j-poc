@@ -197,11 +197,19 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
               disabled={isExecuting}
             >
               <option value="">Select {param.label}</option>
-              {graphData.nodes.map(node => (
-                <option key={node.id} value={node.id}>
-                  {node.properties?.name || node.id} ({node.labels.join(', ')})
-                </option>
-              ))}
+              {graphData.nodes.map(node => {
+                const dataId = node.properties?.id || '';
+                const siteName = node.properties?.site_name || node.properties?.vendor_name || '';
+                const label = node.labels?.[0] || '';
+                const display = dataId
+                  ? (siteName ? `${dataId} — ${siteName} (${label})` : `${dataId} (${label})`)
+                  : `${node.id} (${label})`;
+                return (
+                  <option key={node.id} value={node.id} title={display}>
+                    {display}
+                  </option>
+                );
+              })}
             </select>
             {param.helpText && <small className="algo-help-text">{param.helpText}</small>}
           </div>
