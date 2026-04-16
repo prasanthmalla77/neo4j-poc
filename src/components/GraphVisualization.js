@@ -230,8 +230,7 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
 
     setIsExecuting(true);
     setError(null);
-    // Don't clear previous results during execution — clearing causes the results
-    // panel to unmount, shifts the container width, and NVL re-runs force layout.
+    setAlgorithmResults(null); // Always clear before new run so stale results never linger
 
     try {
       // Lazily create (or recreate) the GDS projection using current graph data
@@ -290,6 +289,7 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
     } catch (err) {
       console.error('[AlgoExec] ❌ FAILED:', err);
       console.error('[AlgoExec] Error stack:', err.stack);
+      setAlgorithmResults(null);
       setError(err.message || 'Algorithm execution failed');
     } finally {
       setIsExecuting(false);
@@ -609,7 +609,14 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
             isExecuting={isExecuting}
           />
 
-          {algorithmResults && (
+          {isExecuting && (
+            <div className="algo-running-overlay">
+              <span className="algo-running-spinner"></span>
+              Running algorithm…
+            </div>
+          )}
+
+          {!isExecuting && algorithmResults && (
             <AlgorithmResults
               key={algorithmResults.executedAt}
               results={algorithmResults}

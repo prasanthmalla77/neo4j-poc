@@ -8,14 +8,11 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
   const [validationErrors, setValidationErrors] = useState([]);
 
   // Derive the algorithm schema + dynamic options synchronously.
-  // useMemo means this always reflects latest graphData and config.targetNodeLabel
-  // WITHOUT any useEffect that could accidentally reset config values.
+  // Full `config` is in deps so ANY config change (label, mode, etc.) refreshes options.
   const algorithmConfig = useMemo(() => {
     if (!selectedAlgorithm || !graphData?.nodes) return null;
     return populateDynamicOptions(selectedAlgorithm, graphData, config);
-  // config must be in deps so property options refresh when targetNodeLabel changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedAlgorithm, graphData, config.targetNodeLabel]);
+  }, [selectedAlgorithm, graphData, config]);
 
   const handleAlgorithmChange = (e) => {
     const algo = e.target.value;
@@ -145,6 +142,22 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
         );
 
       case 'multiselect':
+        // For targetProperties: always compute options live from graphData filtered by the
+        // currently selected label so the checklist immediately reflects the label change.
+        if (paramKey === 'targetProperties' && graphData?.nodes) {
+          const selectedLabel = config.targetNodeLabel || '';
+          const labelPropMap = {};
+          graphData.nodes.forEach(n => {
+            (n.labels || []).forEach(lbl => {
+              if (!labelPropMap[lbl]) labelPropMap[lbl] = new Set();
+              Object.keys(n.properties || {}).forEach(k => labelPropMap[lbl].add(k));
+            });
+          });
+          const propKeys = selectedLabel && labelPropMap[selectedLabel]
+            ? [...labelPropMap[selectedLabel]].sort()
+            : [...new Set(graphData.nodes.flatMap(n => Object.keys(n.properties || {})))].sort();
+          param = { ...param, options: propKeys.map(k => ({ value: k, label: k })) };
+        }
         return (
           <div key={paramKey} className="algo-form-group">
             <label className="algo-label">
