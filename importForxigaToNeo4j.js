@@ -49,9 +49,35 @@ async function clearForxigaData(session) {
     console.log('Forxiga data cleared.');
 }
 
+// Normalise label to PascalCase.
+// All-uppercase multi-char words (FORMULATION, PACKING) → Formulation, Packing
+// Underscored labels (Customer_Market, Distribution_Hub) → CustomerMarket, DistributionHub
+// Short abbreviations kept as-is: API, RM, RSM
+function normalizeNodeLabel(label) {
+    if (!label) return 'Unknown';
+    // Short uppercase abbreviations — keep as-is
+    if (label === label.toUpperCase() && label.length <= 3) return label;
+    // All-caps multi-char → PascalCase (FORMULATION → Formulation)
+    if (label === label.toUpperCase()) {
+        return label.charAt(0) + label.slice(1).toLowerCase();
+    }
+    // Underscored → PascalCase (Customer_Market → CustomerMarket)
+    if (label.includes('_')) {
+        return label.split('_')
+            .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join('');
+    }
+    return label;
+}
+
+// Returns true for placeholder / stub nodes that should not be ingested
+function isMockNode(node) {
+    return node.id.includes('MOCK');
+}
+
 async function createMainNode(session, node) {
     // Use type or stage_of_manufacture as fallback for node_type if not present
-    const nodeType = node.node_type || node.type || node.stage_of_manufacture || 'Unknown';
+    const nodeType = normalizeNodeLabel(node.node_type || node.type || node.stage_of_manufacture || 'Unknown');
 
     const query = `
         CREATE (n:${nodeType} {
@@ -360,28 +386,33 @@ async function createMaterialsPerMarket(session, mainNodeId, materialsPerMarket)
     console.log(`  Created ${materialsPerMarket.length} MaterialsPerMarket nodes for ${mainNodeId}`);
 }
 
-async function createNodeConnections(session, sourceNodeId, connections) {
+async function createNodeConnections(session, sourceNodeId, connections, validIds) {
     if (!connections || connections.length === 0) return;
 
+    let created = 0;
     for (const targetNodeId of connections) {
+        // Skip empty strings only
+        if (!targetNodeId) continue;
+        if (!validIds.has(targetNodeId)) {
+            console.log(`  Skipping dangling ref: ${sourceNodeId} → ${targetNodeId} (target not in dataset)`);
+            continue;
+        }
+
         const query = `
             MATCH (source {id: $sourceNodeId})
             MATCH (target {id: $targetNodeId})
-            CREATE (source)-[:SUPPLIES_TO {brand: $brand}]->(target)
+            MERGE (source)-[:SUPPLIES_TO {brand: $brand}]->(target)
         `;
 
         try {
-            await session.run(query, {
-                sourceNodeId: sourceNodeId,
-                targetNodeId: targetNodeId,
-                brand: BRAND
-            });
+            await session.run(query, { sourceNodeId, targetNodeId, brand: BRAND });
+            created++;
         } catch (error) {
             console.log(`  Warning: Could not create connection from ${sourceNodeId} to ${targetNodeId}`);
         }
     }
 
-    console.log(`  Created ${connections.length} supply chain connections for ${sourceNodeId}`);
+    if (created > 0) console.log(`  Created ${created} supply chain connections for ${sourceNodeId}`);
 }
 
 async function importData() {
@@ -402,8 +433,12 @@ async function importData() {
         // Process each node - Create all nodes first
         console.log(`Processing ${data.node_list.length} nodes...`);
 
+        // Build a set of valid node IDs for dangling-ref checks
+        const validIds = new Set(data.node_list.map(n => n.id));
+
         for (let i = 0; i < data.node_list.length; i++) {
             const node = data.node_list[i];
+
             console.log(`\n[${i + 1}/${data.node_list.length}] Processing ${node.id}...`);
 
             // Create main node
@@ -433,7 +468,7 @@ async function importData() {
         for (let i = 0; i < data.node_list.length; i++) {
             const node = data.node_list[i];
             if (node.connections && node.connections.length > 0) {
-                await createNodeConnections(session, node.id, node.connections);
+                await createNodeConnections(session, node.id, node.connections, validIds);
             }
         }
 

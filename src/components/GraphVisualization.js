@@ -3,7 +3,7 @@ import { InteractiveNvlWrapper } from '@neo4j-nvl/react';
 import { mockJobResponse } from '../data/backendMockData';
 import { fetchGraphData, fetchFilteredGraphData, testConnection } from '../services/neo4jService';
 import { prepareGraphData, getNodeColorByLabel } from '../utils/graphHighlighting';
-import { createGdsProjection, registerProjection, runNodeSimilarity, runShortestPath } from '../services/gdsService';
+import { createGdsProjection, registerProjection, runNodeSimilarity, runShortestPath, runBetweenness } from '../services/gdsService';
 import { ALGORITHM_TYPES } from '../data/algorithmConfigs';
 import AlgorithmPanel from './AlgorithmPanel';
 import AlgorithmResults from './AlgorithmResults';
@@ -143,10 +143,13 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
     console.log('[GraphViz] Applying config:', config);
     setGraphConfig(config);
 
-    // If no node labels selected, show nothing
-    if (config.nodeLabels.length === 0) {
+    const hasNodes = config.nodeLabels.length > 0;
+    const hasRels  = config.relationshipTypes.length > 0;
+
+    // If nothing selected, show empty graph
+    if (!hasNodes && !hasRels) {
       setGraphData({ nodes: [], relationships: [] });
-      console.log('[GraphViz] No node labels selected, showing empty graph');
+      console.log('[GraphViz] Nothing selected, showing empty graph');
       return;
     }
 
@@ -154,44 +157,54 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
       setIsLoadingConfig(true);
       setError(null);
 
-      // Check if we have external data from chat query
       if (externalJobData) {
-        // Filter within the existing chat query result (in-memory filtering)
+        // ── In-memory filtering (chat query result) ─────────────────────────
         console.log('[GraphViz] Filtering within chat query result (in-memory)...');
 
-        const filteredNodes = fullGraphData.nodes.filter(node => {
-          // Filter by node labels
-          const hasMatchingLabel = node.labels && node.labels.some(label => config.nodeLabels.includes(label));
+        let filteredNodes;
+        let filteredRelationships;
 
-          // Filter by brand if brands are selected
-          if (config.brands && config.brands.length > 0) {
-            const hasMatchingBrand = config.brands.includes(node.properties?.brand);
-            return hasMatchingLabel && hasMatchingBrand;
-          }
+        if (hasRels && !hasNodes) {
+          // Case 1: Only relationships selected → keep all nodes touched by those rels
+          const matchingRels = fullGraphData.relationships.filter(rel =>
+            rel.type && config.relationshipTypes.includes(rel.type)
+          );
+          const touchedIds = new Set(matchingRels.flatMap(r => [r.from, r.to]));
+          filteredNodes = fullGraphData.nodes.filter(n => touchedIds.has(n.id));
+          filteredRelationships = matchingRels;
+        } else {
+          // Case 2 (nodes + rels) or Case 3 (only nodes): filter by label first
+          filteredNodes = fullGraphData.nodes.filter(node => {
+            const hasLabel = node.labels && node.labels.some(l => config.nodeLabels.includes(l));
+            if (config.brands?.length > 0) {
+              return hasLabel && config.brands.includes(node.properties?.brand);
+            }
+            return hasLabel;
+          });
 
-          return hasMatchingLabel;
-        });
+          const filteredNodeIds = new Set(filteredNodes.map(n => n.id));
+          filteredRelationships = fullGraphData.relationships.filter(rel => {
+            const validNodes = filteredNodeIds.has(rel.from) && filteredNodeIds.has(rel.to);
+            if (!hasRels) return validNodes; // no rel filter → all rels between selected nodes
+            return rel.type && config.relationshipTypes.includes(rel.type) && validNodes;
+          });
+        }
 
-        const filteredNodeIds = new Set(filteredNodes.map(n => n.id));
+        // Apply brand filter on nodes regardless of case
+        if (config.brands?.length > 0) {
+          filteredNodes = filteredNodes.filter(n => config.brands.includes(n.properties?.brand));
+          const ids = new Set(filteredNodes.map(n => n.id));
+          filteredRelationships = filteredRelationships.filter(r => ids.has(r.from) && ids.has(r.to));
+        }
 
-        const filteredRelationships = fullGraphData.relationships.filter(rel => {
-          const hasValidNodes = filteredNodeIds.has(rel.from) && filteredNodeIds.has(rel.to);
-          if (config.relationshipTypes.length === 0) {
-            return hasValidNodes; // Show all relationships if none selected
-          }
-          return rel.type && config.relationshipTypes.includes(rel.type) && hasValidNodes;
-        });
-
-        setGraphData({
-          nodes: filteredNodes,
-          relationships: filteredRelationships
-        });
-
+        setGraphData({ nodes: filteredNodes, relationships: filteredRelationships });
         console.log(`[GraphViz] Filtered in-memory: ${filteredNodes.length} nodes, ${filteredRelationships.length} relationships`);
+
       } else {
-        // Fetch filtered data from Neo4j (for full graph view)
+        // ── Neo4j fetch ─────────────────────────────────────────────────────
         console.log('[GraphViz] Fetching filtered data from Neo4j...');
 
+        // Pass the config as-is; fetchFilteredGraphData is updated to handle the three cases
         const filteredJob = await fetchFilteredGraphData(
           jobData?.jobId || 'neo4j_job_001',
           config.nodeLabels,
@@ -200,14 +213,9 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
         );
 
         console.log('[GraphViz] Fetched filtered data:', filteredJob);
-
-        // Prepare and set graph data
         const preparedData = prepareGraphData(filteredJob);
         setGraphData(preparedData);
-
-        // Reset stale projection so it gets recreated on next algorithm run
         setGdsProjection(null);
-
         console.log(`[GraphViz] Applied config from Neo4j: ${filteredJob.nodes.length} nodes, ${filteredJob.relationships.length} relationships`);
       }
     } catch (err) {
@@ -262,7 +270,7 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
         }
         projection = registerProjection(jobId, currentNodes, projRels);
       } else {
-        // Shortest path still uses GDS on Neo4j.
+        // Shortest path and Betweenness use GDS on Neo4j (with JS fallback for Betweenness).
         projection = await createGdsProjection(jobId, currentNodes, currentRels);
       }
       console.log('[AlgoExec] Projection ready:', projection);
@@ -275,6 +283,9 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
       } else if (algorithmId === ALGORITHM_TYPES.SHORTEST_PATH) {
         console.log('[AlgoExec] Running Shortest Path on projection:', projection.name);
         results = await runShortestPath(projection.name, config);
+      } else if (algorithmId === ALGORITHM_TYPES.BETWEENNESS) {
+        console.log('[AlgoExec] Running Betweenness Centrality on projection:', projection.name);
+        results = await runBetweenness(projection.name, config);
       } else {
         throw new Error(`Unknown algorithm: ${algorithmId}`);
       }
@@ -303,18 +314,48 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
     if (!nvlRef.current) return;
 
     if (type === 'similarity') {
-      const highlightSet = new Set(data); // [node1Id, node2Id]
+      // data is the full result object with node1, node2, and detail.shared/onlyIn1/onlyIn2
+      const node1Id = String(data.node1);
+      const node2Id = String(data.node2);
+
+      // Build ID sets — coerce all IDs to string for consistent comparison
+      const toIdSet = (arr) => new Set((arr || []).map(n => String(n.id)));
+
+      const sharedIds    = toIdSet(data.detail?.shared);
+      const onlyIn1Ids   = toIdSet(data.detail?.onlyIn1);
+      const onlyIn2Ids   = toIdSet(data.detail?.onlyIn2);
+
+      // Exclude the two compared nodes from non-common sets (they get orange instead)
+      [node1Id, node2Id].forEach(id => {
+        sharedIds.delete(id); onlyIn1Ids.delete(id); onlyIn2Ids.delete(id);
+      });
+
+      const nonCommonIds   = new Set([...onlyIn1Ids, ...onlyIn2Ids]);
+      const comparedIds    = new Set([node1Id, node2Id]);
+      const allHighlighted = new Set([...comparedIds, ...sharedIds, ...nonCommonIds]);
+
+      console.log('[Highlight] compared:', [...comparedIds], '| shared:', [...sharedIds], '| nonCommon:', [...nonCommonIds]);
+      console.log('[Highlight] sample graphData IDs:', graphData.nodes.slice(0, 4).map(n => `${n.id}`));
+
       nvlRef.current.updateElementsInGraph(
-        graphData.nodes.map(n => ({
-          id: n.id,
-          color: highlightSet.has(n.id) ? '#FF6B6B' : getNodeColorByLabel(n.labels?.[0]),
-          size: highlightSet.has(n.id) ? 38 : 25,
-        })),
-        graphData.relationships.map(r => ({
-          id: r.id,
-          color: (highlightSet.has(r.from) && highlightSet.has(r.to)) ? '#FF8C8C' : undefined,
-          width: (highlightSet.has(r.from) && highlightSet.has(r.to)) ? 3 : 1,
-        }))
+        graphData.nodes.map(n => {
+          const nid = String(n.id);
+          if (comparedIds.has(nid))   return { id: n.id, color: '#F39C12', size: 42 };
+          if (sharedIds.has(nid))     return { id: n.id, color: '#1A7A1A', size: 36 };
+          if (nonCommonIds.has(nid))  return { id: n.id, color: '#8B0000', size: 34 };
+          return { id: n.id, color: getNodeColorByLabel(n.labels?.[0]), size: 25 };
+        }),
+        graphData.relationships.map(r => {
+          const fs = String(r.from), ft = String(r.to);
+          const highlightedFrom = allHighlighted.has(fs);
+          const highlightedTo   = allHighlighted.has(ft);
+          const toShared = sharedIds.has(fs) || sharedIds.has(ft);
+          return {
+            id: r.id,
+            color: toShared ? '#1A7A1A' : (highlightedFrom && highlightedTo) ? '#8B0000' : undefined,
+            width: (highlightedFrom && highlightedTo) ? 3 : 1,
+          };
+        })
       );
     } else if (type === 'path') {
       // data is a pathResult object with .nodeIds and .relationshipIds
@@ -337,6 +378,35 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
           color: pathRelIds.has(r.id) ? '#95E1D3' : undefined,
           width: pathRelIds.has(r.id) ? 4 : 1,
         }))
+      );
+    } else if (type === 'betweenness') {
+      // data is a single { nodeId, score, rank } — highlight that node prominently
+      const targetId = String(data.nodeId);
+      nvlRef.current.updateElementsInGraph(
+        graphData.nodes.map(n => {
+          if (String(n.id) === targetId) return { id: n.id, color: '#E53935', size: 50 };
+          return { id: n.id, color: getNodeColorByLabel(n.labels?.[0]), size: 22, opacity: 0.35 };
+        }),
+        graphData.relationships.map(r => ({ id: r.id, width: 1 }))
+      );
+    } else if (type === 'betweenness-all') {
+      // data is the full results array — colour every node as a heat map (red=high, blue=low)
+      const allResults = Array.isArray(data) ? data : [];
+      const maxScore   = allResults[0]?.score || 1;
+      const scoreById  = new Map(allResults.map(r => [String(r.nodeId), r.score]));
+      const heatColor  = (score) => {
+        const t = maxScore > 0 ? score / maxScore : 0;
+        if (t > 0.7) return '#E53935';   // red   — critical
+        if (t > 0.4) return '#FB8C00';   // amber — significant
+        if (t > 0.1) return '#0B6FCC';   // blue  — moderate
+        return '#9E9E9E';                 // grey  — minimal
+      };
+      nvlRef.current.updateElementsInGraph(
+        graphData.nodes.map(n => {
+          const score = scoreById.get(String(n.id)) ?? 0;
+          return { id: n.id, color: heatColor(score), size: score > 0 ? 28 + Math.round((score / maxScore) * 20) : 22 };
+        }),
+        graphData.relationships.map(r => ({ id: r.id, width: 1 }))
       );
     }
   };
@@ -377,6 +447,13 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
         csvContent = 'Source,Target,Path Length,Total Cost,Path\n';
         results.results.forEach(r => {
           csvContent += `${r.sourceNode},${r.targetNode},${r.pathLength},${r.totalCost},"${r.pathDescription}"\n`;
+        });
+      } else if (results.algorithmType === ALGORITHM_TYPES.BETWEENNESS) {
+        csvContent = 'Rank,Node ID,Node Name,Node Type,Score\n';
+        results.results.forEach(r => {
+          const name = r.nodeData?.properties?.site_name || r.nodeData?.properties?.vendor_name || r.nodeData?.properties?.id || r.nodeId;
+          const type = r.nodeData?.labels?.[0] || '';
+          csvContent += `${r.rank},${r.nodeId},"${name}",${type},${r.score}\n`;
         });
       }
 

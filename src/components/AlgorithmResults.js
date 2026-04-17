@@ -229,7 +229,7 @@ const AlgorithmResults = ({ results, onHighlight, onClearHighlight, onExport }) 
                     <div className="result-actions-inline">
                       <button
                         className="action-btn highlight-btn"
-                        onClick={() => onHighlight([result.node1, result.node2], 'similarity')}
+                        onClick={() => onHighlight(result, 'similarity')}
                       >
                         Highlight
                       </button>
@@ -389,10 +389,160 @@ const AlgorithmResults = ({ results, onHighlight, onClearHighlight, onExport }) 
     );
   };
 
+  const renderBetweennessResults = () => {
+    const allResults = results.results;
+    const maxScore   = allResults[0]?.score || 1;
+    const totalScore = allResults.reduce((s, r) => s + r.score, 0);
+    const isNorm     = results.stats?.normalized;
+
+    // Criticality Index: 0–100, relative to the top node. Always interpretable.
+    const critIndex = (score) => Math.round((score / maxScore) * 100);
+
+    // % of all routes this node sits on (share of total betweenness)
+    const routeShare = (score) =>
+      totalScore > 0 ? ((score / totalScore) * 100).toFixed(1) + '%' : '0%';
+
+    // Raw score label — humanises what the number actually counts
+    const rawLabel = (score) =>
+      isNorm
+        ? (score * 100).toFixed(3) + '% of paths'
+        : Math.round(score).toLocaleString() + ' routes';
+
+    const riskTier = (score) => {
+      const t = maxScore > 0 ? score / maxScore : 0;
+      if (t > 0.7) return { label: 'Critical',    cls: 'tier-critical' };
+      if (t > 0.4) return { label: 'Significant', cls: 'tier-significant' };
+      if (t > 0.1) return { label: 'Moderate',    cls: 'tier-moderate' };
+      return               { label: 'Low',         cls: 'tier-low' };
+    };
+
+    const barColor = (score) => {
+      const t = maxScore > 0 ? score / maxScore : 0;
+      if (t > 0.7) return '#E53935';
+      if (t > 0.4) return '#FB8C00';
+      if (t > 0.1) return '#0B6FCC';
+      return '#9E9E9E';
+    };
+
+    return (
+      <div className="results-container">
+        <div className="results-header betweenness-header">
+          <div className="results-title-section">
+            <h3 className="results-title">Betweenness Centrality</h3>
+            <span className="results-count">{allResults.length} nodes ranked</span>
+          </div>
+          <div className="results-actions">
+            <button className="export-btn" onClick={() => handleExport('csv')}>Export CSV</button>
+            <button
+              className="heatmap-btn"
+              onClick={() => onHighlight(allResults, 'betweenness-all')}
+            >
+              Heat Map
+            </button>
+            <button className="clear-btn" onClick={onClearHighlight}>Clear</button>
+          </div>
+        </div>
+
+        <div className="betweenness-explainer">
+          <span className="explainer-icon">💡</span>
+          <span>
+            <strong>Criticality Index (0–100)</strong> — how many shortest supply routes pass through
+            each node relative to the most critical node. A score of 100 means this node sits on
+            more routes than any other; disrupting it breaks the most connections.
+          </span>
+        </div>
+
+        <div className="results-stats">
+          <div className="stat-item">
+            <span className="stat-label">Highest Risk Node:</span>
+            <span className="stat-value stat-critical">{results.stats?.topNode || '—'}</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-label">Controls:</span>
+            <span className="stat-value">{routeShare(results.stats?.topScore ?? 0)} of all routes</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-label">Computed via:</span>
+            <span className="stat-value">{results.stats?.usedGds ? 'Neo4j GDS' : 'In-memory JS'}</span>
+          </div>
+        </div>
+
+        <div className="betweenness-legend">
+          <span className="legend-dot" style={{ background: '#E53935' }} /> Critical (index ≥ 70) &nbsp;
+          <span className="legend-dot" style={{ background: '#FB8C00' }} /> Significant (≥ 40) &nbsp;
+          <span className="legend-dot" style={{ background: '#0B6FCC' }} /> Moderate (≥ 10) &nbsp;
+          <span className="legend-dot" style={{ background: '#9E9E9E' }} /> Low
+        </div>
+
+        <div className="results-list">
+          {allResults.map((result) => {
+            const pct      = maxScore > 0 ? (result.score / maxScore) * 100 : 0;
+            const idx      = critIndex(result.score);
+            const tier     = riskTier(result.score);
+            const nodeName = result.nodeData?.properties?.site_name
+              || result.nodeData?.properties?.vendor_name
+              || result.nodeData?.properties?.id
+              || result.nodeId;
+            const nodeLabel = result.nodeData?.labels?.[0] || '';
+
+            return (
+              <div key={result.nodeId} className="result-item betweenness-item">
+                <div className="result-main">
+                  <div className="centrality-rank">
+                    <span className="rank-number">#{result.rank}</span>
+                  </div>
+
+                  {/* Criticality Index badge */}
+                  <div className="centrality-index-badge" style={{ borderColor: barColor(result.score) }}>
+                    <span className="ci-value">{idx}</span>
+                    <span className="ci-label">/100</span>
+                  </div>
+
+                  <div className="result-content">
+                    <div className="betweenness-row">
+                      <div className="node-info">
+                        <div className="node-name-row">
+                          <span className="node-label">{nodeLabel}</span>
+                          <span className={`risk-badge ${tier.cls}`}>{tier.label}</span>
+                        </div>
+                        <span className="node-name">{nodeName}</span>
+                        <span className="route-share-label">
+                          Controls {routeShare(result.score)} of all routes
+                          &nbsp;·&nbsp;
+                          <span className="raw-score-label">{rawLabel(result.score)}</span>
+                        </span>
+                      </div>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="centrality-bar-wrap">
+                      <div
+                        className="centrality-bar"
+                        style={{ width: `${pct}%`, background: barColor(result.score) }}
+                      />
+                    </div>
+                    <div className="result-actions-inline">
+                      <button
+                        className="action-btn highlight-btn"
+                        onClick={() => onHighlight(result, 'betweenness')}
+                      >
+                        Highlight
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="algorithm-results">
       {results.algorithmType === ALGORITHM_TYPES.NODE_SIMILARITY && renderNodeSimilarityResults()}
       {results.algorithmType === ALGORITHM_TYPES.SHORTEST_PATH && renderShortestPathResults()}
+      {results.algorithmType === ALGORITHM_TYPES.BETWEENNESS && renderBetweennessResults()}
     </div>
   );
 };

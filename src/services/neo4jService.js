@@ -65,19 +65,61 @@ export const fetchFilteredGraphData = async (jobId = 'neo4j_job_001', nodeLabels
   const driver = initDriver();
   const session = driver.session({ database: NEO4J_CONFIG.database });
 
+  const hasNodes = nodeLabels.length > 0;
+  const hasRels  = relationshipTypes.length > 0;
+
   try {
     let nodesResult, relsResult;
 
-    // Build WHERE conditions
-    const whereConditions = [];
+    if (hasRels && !hasNodes) {
+      // ── Case 1: Only relationships selected ─────────────────────────────
+      // Fetch relationships first, then derive nodes from their endpoints
+      const typeConditions = relationshipTypes.map(type => `type(r) = '${type}'`).join(' OR ');
+      const brandClause = brands.length > 0
+        ? ` AND (${brands.map(b => `r.brand = '${b}'`).join(' OR ')})`
+        : '';
 
-    // Add label conditions
-    if (nodeLabels.length > 0) {
+      relsResult = await session.run(`
+        MATCH (start)-[r]->(end)
+        WHERE (${typeConditions})${brandClause}
+        RETURN
+          id(r) as id,
+          type(r) as type,
+          id(start) as startNode,
+          id(end) as endNode,
+          properties(r) as properties,
+          id(start) as sid, labels(start) as slabels, properties(start) as sprops,
+          id(end) as eid, labels(end) as elabels, properties(end) as eprops
+      `);
+
+      // Derive unique nodes from the relationship endpoints
+      const nodeMap = new Map();
+      relsResult.records.forEach(rec => {
+        const sid = rec.get('sid').toString();
+        const eid = rec.get('eid').toString();
+        if (!nodeMap.has(sid)) nodeMap.set(sid, { id: sid, labels: rec.get('slabels'), properties: rec.get('sprops') });
+        if (!nodeMap.has(eid)) nodeMap.set(eid, { id: eid, labels: rec.get('elabels'), properties: rec.get('eprops') });
+      });
+
+      const nodes = Array.from(nodeMap.values());
+      const nodeIds = new Set(nodes.map(n => n.id));
+      const relationships = relsResult.records.map(rec => ({
+        id: rec.get('id').toString(),
+        type: rec.get('type'),
+        startNode: rec.get('startNode').toString(),
+        endNode:   rec.get('endNode').toString(),
+        properties: rec.get('properties')
+      })).filter(r => nodeIds.has(r.startNode) && nodeIds.has(r.endNode));
+
+      return { nodes, relationships };
+    }
+
+    // ── Case 2 (nodes + rels) or Case 3 (only nodes) ────────────────────
+    const whereConditions = [];
+    if (hasNodes) {
       const labelConditions = nodeLabels.map(label => `'${label}' IN labels(n)`).join(' OR ');
       whereConditions.push(`(${labelConditions})`);
     }
-
-    // Add brand conditions
     if (brands.length > 0) {
       const brandConditions = brands.map(brand => `n.brand = '${brand}'`).join(' OR ');
       whereConditions.push(`(${brandConditions})`);
@@ -170,6 +212,13 @@ export const fetchFilteredGraphData = async (jobId = 'neo4j_job_001', nodeLabels
         description: 'Find shortest path between two nodes',
         category: 'path-finding',
         tier: 'production'
+      },
+      {
+        id: 'betweenness',
+        name: 'Betweenness Centrality',
+        description: 'Identify single points of failure — nodes that control the most supply routes',
+        category: 'centrality',
+        tier: 'production'
       }
     ];
 
@@ -252,6 +301,13 @@ export const fetchGraphData = async (jobId = 'neo4j_job_001') => {
         name: 'Shortest Path',
         description: 'Find shortest path between two nodes',
         category: 'path-finding',
+        tier: 'production'
+      },
+      {
+        id: 'betweenness',
+        name: 'Betweenness Centrality',
+        description: 'Identify single points of failure — nodes that control the most supply routes',
+        category: 'centrality',
         tier: 'production'
       }
     ];

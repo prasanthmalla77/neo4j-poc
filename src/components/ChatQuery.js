@@ -449,6 +449,13 @@ const ChatQuery = () => {
             description: 'Finds the shortest path between two nodes',
             category: 'path-finding',
             tier: 'production'
+          },
+          {
+            id: 'betweenness',
+            name: 'Betweenness Centrality',
+            description: 'Identify single points of failure — nodes that control the most supply routes',
+            category: 'centrality',
+            tier: 'production'
           }
         ]
       };

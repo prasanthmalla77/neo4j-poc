@@ -3,7 +3,8 @@
 
 export const ALGORITHM_TYPES = {
   NODE_SIMILARITY: 'nodeSimilarity',
-  SHORTEST_PATH: 'shortestPath'
+  SHORTEST_PATH: 'shortestPath',
+  BETWEENNESS: 'betweenness'
 };
 
 // Node Similarity Algorithm Configuration
@@ -139,11 +140,6 @@ export const shortestPathConfig = {
           description: 'Classic shortest path algorithm with optional weights'
         },
         {
-          value: 'astar',
-          label: 'A* (A-Star)',
-          description: 'Heuristic-based algorithm, faster for spatial data'
-        },
-        {
           value: 'yens',
           label: "Yen's K-Shortest Paths",
           description: 'Finds K alternative shortest paths'
@@ -210,10 +206,57 @@ export const shortestPathConfig = {
   }
 };
 
+// Betweenness Centrality Algorithm Configuration
+export const betweennessConfig = {
+  id: 'betweenness',
+  name: 'Betweenness Centrality',
+  description: 'Counts how many shortest paths between all node pairs pass through each node — identifies single points of failure',
+  category: 'centrality',
+
+  parameters: {
+    normalized: {
+      label: 'Normalise Scores',
+      type: 'select',
+      required: true,
+      default: 'true',
+      options: [
+        {
+          value: 'true',
+          label: 'Yes — scale to 0–1',
+          description: 'Divides each score by (n−1)(n−2)/2, making results comparable across different graph sizes'
+        }
+      ],
+      helpText: 'Normalised scores allow comparison across different graph sizes'
+    },
+
+    samplingRatio: {
+      label: 'Sampling Ratio',
+      type: 'number',
+      required: false,
+      default: 1.0,
+      min: 0.01,
+      max: 1.0,
+      step: 0.01,
+      helpText: 'Fraction of nodes used as sources when calling Neo4j GDS (1.0 = exact). Ignored when running in-memory.'
+    }
+  },
+
+  defaultConfig: {
+    normalized: 'true',
+    samplingRatio: 1.0
+  },
+
+  outputSchema: {
+    type: 'centrality-scores',
+    fields: ['nodeId', 'score', 'rank']
+  }
+};
+
 // Map of all algorithm configurations
 export const algorithmConfigs = {
   [ALGORITHM_TYPES.NODE_SIMILARITY]: nodeSimilarityConfig,
-  [ALGORITHM_TYPES.SHORTEST_PATH]: shortestPathConfig
+  [ALGORITHM_TYPES.SHORTEST_PATH]: shortestPathConfig,
+  [ALGORITHM_TYPES.BETWEENNESS]: betweennessConfig
 };
 
 // Helper function to get algorithm config by ID

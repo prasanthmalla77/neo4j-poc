@@ -28,7 +28,7 @@ const toNum = (val) => {
  * outside the current filtered view, keeping result IDs in sync with graphData.
  */
 export const createGdsProjection = async (jobId, nodes, relationships) => {
-  const projectionName = `graph_gds_${jobId}`;
+  const projectionName = `graph_gds_${crypto.randomUUID()}`;
 
   // Cache node/rel data locally for result enrichment
   activeProjections.set(projectionName, { name: projectionName, jobId, nodes, relationships });
@@ -100,7 +100,7 @@ export const getProjection    = (projectionName) => activeProjections.get(projec
  * Used by node similarity which runs entirely in JS.
  */
 export const registerProjection = (jobId, nodes, relationships) => {
-  const projectionName = `graph_gds_${jobId}`;
+  const projectionName = `graph_gds_${crypto.randomUUID()}`;
   activeProjections.set(projectionName, { name: projectionName, jobId, nodes, relationships });
   console.log(`[Similarity] Registered in-memory projection: ${projectionName} — ${nodes.length} nodes, ${relationships.length} rels`);
   return {
@@ -184,8 +184,9 @@ export const runNodeSimilarity = async (projectionName, config) => {
         const union        = sharedIds.length + onlyInA.length + onlyInB.length;
         const score        = union > 0 ? sharedIds.length / union : 0;
         if (score >= similarityThreshold) {
-          // Resolve IDs to node objects for display
-          const resolve = (id) => nodes.find(n => n.id === id) || { id, labels: [], properties: {} };
+          // Resolve neighbour IDs to full node objects for display.
+          // Fall back to a stub with just the id so the highlight handler can still match.
+          const resolve = (id) => nodes.find(n => String(n.id) === String(id)) || { id: String(id), labels: [], properties: {} };
           pairs.push({
             node1: a.id, node2: b.id, score,
             node1Data: a, node2Data: b,
@@ -319,10 +320,11 @@ export const runShortestPath = async (projectionName, config) => {
     let records = [];
 
     if (algorithm === 'yens') {
+      // GDS 2.x+: gds.shortestPath.yens.stream (replaces gds.kShortestPaths.yens.stream from GDS 1.x)
       const result = await session.run(
         `MATCH (source) WHERE id(source) = toInteger($sourceId)
          MATCH (target) WHERE id(target) = toInteger($targetId)
-         CALL gds.kShortestPaths.yens.stream($projName, {
+         CALL gds.shortestPath.yens.stream($projName, {
            sourceNode: source,
            targetNode: target,
            k: $kPaths
@@ -415,6 +417,166 @@ const _buildPathResult = (nodeIds, totalCost, sourceNode, targetNode, nodes, rel
     pathDescription: pathNodes.map(n =>
       n.properties?.site_name || n.properties?.vendor_name || n.properties?.id || n.id
     ).join(' → '),
+  };
+};
+
+// --- Betweenness Centrality -------------------------------------------------------
+
+/**
+ * Brandes algorithm — BFS-based exact betweenness centrality for unweighted graphs.
+ * Returns a Map of nodeId (string) → raw score.
+ * Runs entirely in JavaScript; no Neo4j GDS required.
+ */
+const _brandesBetweenness = (nodes, relationships) => {
+  const adj = new Map();
+  nodes.forEach(n => adj.set(String(n.id), []));
+
+  relationships.forEach(r => {
+    const s = String(r.startNode ?? r.from);
+    const e = String(r.endNode ?? r.to);
+    if (adj.has(s)) adj.get(s).push(e);
+    if (adj.has(e)) adj.get(e).push(s);
+  });
+
+  const nodeIds = nodes.map(n => String(n.id));
+  const betweenness = new Map(nodeIds.map(id => [id, 0]));
+
+  for (const s of nodeIds) {
+    const stack = [];
+    const pred  = new Map(nodeIds.map(id => [id, []]));
+    const sigma = new Map(nodeIds.map(id => [id, 0]));
+    const dist  = new Map(nodeIds.map(id => [id, -1]));
+
+    sigma.set(s, 1);
+    dist.set(s, 0);
+
+    const queue = [s];
+    while (queue.length > 0) {
+      const v = queue.shift();
+      stack.push(v);
+      for (const w of (adj.get(v) || [])) {
+        if (dist.get(w) < 0) {
+          queue.push(w);
+          dist.set(w, dist.get(v) + 1);
+        }
+        if (dist.get(w) === dist.get(v) + 1) {
+          sigma.set(w, sigma.get(w) + sigma.get(v));
+          pred.get(w).push(v);
+        }
+      }
+    }
+
+    const delta = new Map(nodeIds.map(id => [id, 0]));
+    while (stack.length > 0) {
+      const w = stack.pop();
+      for (const v of pred.get(w)) {
+        delta.set(v, delta.get(v) + (sigma.get(v) / sigma.get(w)) * (1 + delta.get(w)));
+      }
+      if (w !== s) {
+        betweenness.set(w, betweenness.get(w) + delta.get(w));
+      }
+    }
+  }
+
+  // Undirected graph — divide by 2 to avoid double-counting paths
+  betweenness.forEach((v, k) => betweenness.set(k, v / 2));
+  return betweenness;
+};
+
+/**
+ * Run Betweenness Centrality.
+ * Attempts Neo4j GDS `gds.betweenness.stream` first; falls back to in-memory Brandes.
+ */
+export const runBetweenness = async (projectionName, config) => {
+  console.log('[GDS] runBetweenness called:', { projectionName, config });
+  const projection = activeProjections.get(projectionName);
+  if (!projection) throw new Error(`Projection ${projectionName} not found`);
+
+  const { normalized = 'true', samplingRatio = 1.0 } = config;
+  const isNormalized = normalized === 'true' || normalized === true;
+  const { nodes, relationships } = projection;
+
+  let scoreMap;
+  let usedGds = false;
+
+  const driver = initDriver();
+  const session = driver.session({ database: NEO4J_DATABASE });
+  try {
+    const samplingSize = Math.max(10, Math.round(nodes.length * Number(samplingRatio)));
+    const usesSampling = Number(samplingRatio) < 1.0;
+
+    const gdsQuery = usesSampling
+      ? `CALL gds.betweenness.stream($projName, { samplingSize: $samplingSize })
+         YIELD nodeId, score
+         RETURN toString(nodeId) AS nodeId, score`
+      : `CALL gds.betweenness.stream($projName)
+         YIELD nodeId, score
+         RETURN toString(nodeId) AS nodeId, score`;
+
+    const result = await session.run(gdsQuery, {
+      projName: projectionName,
+      samplingSize: neo4j.int(samplingSize),
+    });
+
+    scoreMap = new Map();
+    result.records.forEach(rec => {
+      scoreMap.set(rec.get('nodeId'), toNum(rec.get('score')));
+    });
+    usedGds = true;
+    console.log('[GDS] Betweenness via GDS — scored', scoreMap.size, 'nodes');
+  } catch (gdsErr) {
+    console.warn('[GDS] Betweenness GDS call failed, falling back to JS Brandes:', gdsErr.message);
+    scoreMap = _brandesBetweenness(nodes, relationships);
+    usedGds = false;
+  } finally {
+    await session.close();
+  }
+
+  // Normalise: divide raw score by (n-1)(n-2)/2  (undirected formula)
+  // Only score nodes that exist in the current filtered projection (not all nodes in Neo4j).
+  // GDS projects by label, so it can include nodes outside the UI-filtered set.
+  const validNodeIds = new Set(nodes.map(n => String(n.id)));
+
+  const n = nodes.length;
+  const denominator = n > 2 ? ((n - 1) * (n - 2)) / 2 : 1;
+
+  const finalScores = new Map();
+  scoreMap.forEach((rawScore, nodeId) => {
+    if (!validNodeIds.has(nodeId)) return; // skip nodes not in filtered view
+    finalScores.set(nodeId, isNormalized ? rawScore / denominator : rawScore);
+  });
+
+  // Sort descending, keep all nodes that scored > 0, always include at least top 10
+  const sortedEntries = [...finalScores.entries()]
+    .sort((a, b) => b[1] - a[1]);
+
+  const results = sortedEntries
+    .map(([nodeId, score], idx) => {
+      const nodeData = nodes.find(nd => String(nd.id) === nodeId)
+        || { id: nodeId, labels: [], properties: {} };
+      return { nodeId, score, rank: idx + 1, nodeData };
+    })
+    .filter((r, idx) => r.score > 0 || idx < 10);
+
+  const topResult = results[0];
+  const topNodeName = topResult?.nodeData?.properties?.site_name
+    || topResult?.nodeData?.properties?.vendor_name
+    || topResult?.nodeData?.properties?.id
+    || topResult?.nodeId
+    || '—';
+
+  return {
+    algorithmType: ALGORITHM_TYPES.BETWEENNESS,
+    projectionName, config,
+    executedAt: new Date().toISOString(),
+    resultCount: results.length, results,
+    stats: {
+      nodesScored: scoreMap.size,
+      normalized: isNormalized,
+      usedGds,
+      topNode: topNodeName,
+      topScore: topResult?.score ?? 0,
+    },
   };
 };
 
