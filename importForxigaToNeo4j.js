@@ -134,7 +134,7 @@ async function createMaterialNodes(session, mainNodeId, materials) {
 
     for (const material of materials) {
         const query = `
-            MATCH (main {id: $mainNodeId})
+            MATCH (main {id: $mainNodeId, brand: $brand})
             CREATE (m:Material {
                 brand: $brand,
                 material_code: $material_code,
@@ -168,7 +168,7 @@ async function createMaterialLocationNodes(session, mainNodeId, materialLocation
 
     for (const location of materialLocations) {
         const query = `
-            MATCH (m:Material {material_code: $material_code, plant_code: $plant_code})
+            MATCH (m:Material {material_code: $material_code, plant_code: $plant_code, brand: $brand})
             CREATE (ml:MaterialLocation {
                 brand: $brand,
                 material_identifier: $material_identifier,
@@ -252,7 +252,7 @@ async function createInventoryDataPoints(session, mainNodeId, dataPoints) {
     if (!dataPoints) return;
 
     const query = `
-        MATCH (main {id: $mainNodeId})
+        MATCH (main {id: $mainNodeId, brand: $brand})
         CREATE (idp:InventoryDataPoints {
             brand: $brand,
             inventory_days_covered_API: $inventory_days_covered_API,
@@ -296,7 +296,7 @@ async function createProductionDataPoints(session, mainNodeId, dataPoints) {
     if (!dataPoints) return;
 
     const query = `
-        MATCH (main {id: $mainNodeId})
+        MATCH (main {id: $mainNodeId, brand: $brand})
         CREATE (pdp:ProductionDataPoints {
             brand: $brand,
             production_budget: $production_budget,
@@ -322,7 +322,7 @@ async function createCustomerDataPoints(session, mainNodeId, dataPoints) {
     if (!dataPoints) return;
 
     const query = `
-        MATCH (main {id: $mainNodeId})
+        MATCH (main {id: $mainNodeId, brand: $brand})
         CREATE (cdp:CustomerDataPoints {
             brand: $brand,
             customer_name: $customer_name,
@@ -357,7 +357,7 @@ async function createMaterialsPerMarket(session, mainNodeId, materialsPerMarket)
 
     for (const marketData of materialsPerMarket) {
         const query = `
-            MATCH (main {id: $mainNodeId})
+            MATCH (main {id: $mainNodeId, brand: $brand})
             CREATE (mpm:MaterialsPerMarket {
                 brand: $brand,
                 market_name: $market_name,
@@ -399,8 +399,8 @@ async function createNodeConnections(session, sourceNodeId, connections, validId
         }
 
         const query = `
-            MATCH (source {id: $sourceNodeId})
-            MATCH (target {id: $targetNodeId})
+            MATCH (source {id: $sourceNodeId, brand: $brand})
+            MATCH (target {id: $targetNodeId, brand: $brand})
             MERGE (source)-[:SUPPLIES_TO {brand: $brand}]->(target)
         `;
 

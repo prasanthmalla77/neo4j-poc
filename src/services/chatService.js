@@ -337,6 +337,20 @@ OPTIONAL MATCH (europe)-[:SUPPLIES_TO*1..3]->(apac)
 RETURN apac, m, prod, europe`,
     description: 'Growth enablement strategy: Shift 20-30% production to available capacity (Puerto Rico 40%, Asia sites), develop APAC API sourcing (current 4-6 month lead time from Europe), consolidate India distribution (13→8 locations saves 20-25% logistics costs)',
     dashboardType: 'supply-chain'
+  },
+
+  // === TOP 2 BRANDS CHINA MARKET — END-TO-END SUPPLY CHAIN ===
+  'top 2 brands in china market and their end to end supply chain': {
+    query: `MATCH (market:CustomerMarket {id: 'Customer_Market_CN'})
+MATCH (n)-[:SUPPLIES_TO*0..10]->(market)
+WHERE n.brand = market.brand AND NOT n.id CONTAINS 'MOCK'
+WITH DISTINCT n
+OPTIONAL MATCH (n)-[r:SUPPLIES_TO]->(connected {brand: n.brand})
+WHERE NOT connected.id CONTAINS 'MOCK'
+RETURN n, r, connected
+LIMIT 200`,
+    description: 'Fetching end-to-end supply chains for Forxiga and Tagrisso serving the China customer market — from API through formulation, packing, and distribution to market delivery',
+    dashboardType: 'supply-chain'
   }
 };
 
@@ -344,10 +358,86 @@ RETURN apac, m, prod, europe`,
 const generateNLPAnswer = (userQuestion, graphData) => {
   const normalizedQ = userQuestion.toLowerCase();
 
+  // === TOP 2 BRANDS IN CHINA MARKET — End-to-End Supply Chain ===
+  // Checked FIRST to prevent keyword fallthrough from cost/risk/growth matchers
+  if (normalizedQ === 'top 2 brands in china market and their end to end supply chain') {
+    return `## 🇨🇳 Top 2 Brands in the China Market — End-to-End Supply Chain
+
+Both **Forxiga** (Dapagliflozin) and **Tagrisso** (Osimertinib) serve \`Customer_Market_CN\`. Their supply chain structures are fundamentally different — Forxiga has two parallel paths into China while Tagrisso has a single import-based path.
+
+---
+
+### 🥇 Forxiga — China Market Supply Chains
+
+Forxiga has **two parallel supply chains** serving China:
+
+#### Chain 1 — Local-for-Local (Taizhou, China)
+
+| Stage | Node ID | Site Name | Country |
+|-------|---------|-----------|-------|
+| **API** | API_Sk_Biotek_Ireland | SK biotek Ireland Limited | Ireland |
+| **API** | API_Dottikon_Exclusive_Switzerland | DOTTIKON EXCLUSIVE SYNTHESIS AG | Switzerland |
+| **Storage** | STORAGE_Dottikon_Exclusive_Switzerland | DOTTIKON EXCLUSIVE SYNTHESIS AG | Sweden (SSEC) |
+| **Formulation** | FORM_CN40 | AstraZeneca China Taizhou (CN40) | China 🇨🇳 |
+| **Packing** | FP_CN40 | AstraZeneca China Taizhou (CN40) | China 🇨🇳 |
+| **Distribution Hub** | DISTRIBUTION HUB_CN10 | AstraZeneca China Imported FG (CN10) | China 🇨🇳 |
+| **Customer Market** | Customer_Market_CN | China Market | China 🇨🇳 |
+
+> FP_CN40 connects to Customer_Market_CN both directly and via DISTRIBUTION HUB_CN10.
+
+#### Chain 2 — Import via US Formulation + China Packing (CN20)
+
+| Stage | Node ID | Site Name | Country |
+|-------|---------|-----------|-------|
+| **API** | API_Sk_Biotek_Ireland | SK biotek Ireland Limited | Ireland |
+| **API** | API_Dottikon_Exclusive_Switzerland | DOTTIKON EXCLUSIVE SYNTHESIS AG | Switzerland |
+| **Storage** | STORAGE_Dottikon_Exclusive_Switzerland | DOTTIKON EXCLUSIVE SYNTHESIS AG | Sweden (SSEC) |
+| **Formulation** | FORM_1448 | Mt Vernon (1448) | United States |
+| **Packing** | FP_CN20 | AstraZeneca Pharma Co., Ltd. (CN20) | China 🇨🇳 |
+| **Distribution Hub** | DISTRIBUTION HUB_CN10 | AstraZeneca China Imported FG (CN10) | China 🇨🇳 |
+| **Customer Market** | Customer_Market_CN | China Market | China 🇨🇳 |
+
+> FP_CN20 (Forxiga) also feeds 9 APAC distribution hubs: MY10, AU10, ID10, TH10, NZ10, PH10, SG10, HK10, IN1B → Customer_Market_ASIAPAC.
+
+---
+
+### 🥈 Tagrisso — China Market Supply Chain
+
+Tagrisso has a **single supply chain** serving China — formulation in Sweden, packing in China:
+
+| Stage | Node ID | Site Name | Country |
+|-------|---------|-----------|-------|
+| **API** | API_Lonza_LTD_Switzerland | Lonza LTD (Basel) | Switzerland (SCHC) |
+| **API** | API_Dottikon_Exclusive_Switzerland | DOTTIKON EXCLUSIVE SYNTHESIS AG | Switzerland (SCHC) |
+| **Storage** | STORAGE_Lonza_LTD_Switzerland | LONZA LTD | Sweden (SSEC) |
+| **Storage** | STORAGE_Dottikon_Exclusive_Switzerland | DOTTIKON EXCLUSIVE SYNTHESIS AG | Sweden (SSEC) |
+| **Formulation** | FORM_SE01 | SE: Snäckviken / Gärtuna (SE01) | Sweden 🇸🇪 |
+| **Packing** | FP_CN20 | AstraZeneca Pharma Co., Ltd. (CN20) | China 🇨🇳 |
+| **Customer Market** | Customer_Market_CN | China Market | China 🇨🇳 |
+
+> FORM_SE01 (Tagrisso) also supplies FP_JP10 (Japan), FP_1402 (US), FP_SE01 (Sweden), and others — those are outside the China chain.
+
+---
+
+### 📊 Supply Chain Comparison: Forxiga vs Tagrisso in China
+
+| Dimension | Forxiga | Tagrisso |
+|-----------|---------|----------|
+| **China supply chains** | 2 (CN40 local + CN20 import) | 1 (CN20 import only) |
+| **Local formulation in China** | Yes — FORM_CN40 (Taizhou, CN40) | No |
+| **China packing sites** | FP_CN40 (Taizhou) + FP_CN20 | FP_CN20 only |
+| **Formulation sites for China** | FORM_CN40 (China) + FORM_1448 (US) | FORM_SE01 (Sweden) |
+| **API — Ireland (SK Biotek)** | ✓ | ✗ |
+| **API — Switzerland (Lonza)** | ✗ | ✓ |
+| **API — Switzerland (Dottikon)** | ✓ | ✓ |
+| **API storage location** | Sweden (SSEC) | Sweden (SSEC) |
+| **Distribution hub to market** | DISTRIBUTION HUB_CN10 (CN10) | Direct — FP_CN20 → Customer_Market_CN |`;
+  }
+
   // === OPERATIONAL QUESTIONS ===
 
   // Q4: Tagrisso external vendor sites and countries
-  if (normalizedQ.includes('tagrisso') && normalizedQ.includes('external vendor')) {
+  if (normalizedQ === 'which tagrisso nodes are external vendor sites and what countries are they in') {
     return `## 🌍 Tagrisso External Vendor Sites by Country
 
 The Tagrisso supply chain has external vendor and ESM (External Supply Management) nodes spanning **2 identified countries**:
@@ -366,7 +456,7 @@ The Tagrisso supply chain has external vendor and ESM (External Supply Managemen
   }
 
   // Q11: Forxiga formulation sites with >5 downstream connections
-  if (normalizedQ.includes('formulation') && normalizedQ.includes('5 downstream')) {
+  if (normalizedQ === 'which forxiga formulation sites supply to more than 5 downstream nodes') {
     const nodeById = {};
     (graphData?.nodes || []).forEach(n => { nodeById[n.id] = n; });
     const connCounts = {};
@@ -387,7 +477,7 @@ ${siteLines.join('\n') || 'No formulation sites with >5 downstream connections f
   }
 
   // Q10: Customer markets supplied by Forxiga packing sites
-  if (normalizedQ.includes('customer markets') || (normalizedQ.includes('customer') && normalizedQ.includes('forxiga') && normalizedQ.includes('packing'))) {
+  if (normalizedQ === 'show all customer markets supplied by forxiga packing sites') {
     return `## 🏪 Forxiga Customer Markets — Supplied by Packing Sites
 
 Forxiga packing sites supply **13 distinct customer markets** globally, served by **12 packing sites** across 8 countries:
@@ -412,7 +502,7 @@ Forxiga packing sites supply **13 distinct customer markets** globally, served b
   }
 
   // Q9: Shared sites across Forxiga and Tagrisso
-  if (normalizedQ.includes('both forxiga and tagrisso') || (normalizedQ.includes('appear in both') && normalizedQ.includes('supply'))) {
+  if (normalizedQ === 'are there any sites that appear in both forxiga and tagrisso supply chains') {
     return `## 🔄 Sites Shared Across Both Forxiga and Tagrisso Supply Chains
 
 The graph shows **~61 distinct sites** appear in both the Forxiga and Tagrisso supply chains. Each node exists twice in the database (once per brand) with identical site codes.
@@ -441,7 +531,7 @@ The graph shows **~61 distinct sites** appear in both the Forxiga and Tagrisso s
   }
 
   // Q8: Countries with both Formulation and Packing for Tagrisso
-  if (normalizedQ.includes('countries') && normalizedQ.includes('formulation') && normalizedQ.includes('packing')) {
+  if (normalizedQ === 'which countries have both a formulation and a packing site for tagrisso') {
     return `## 🌍 Tagrisso Countries with Both Formulation & Packing Sites
 
 **3 countries** in the Tagrisso network host both a formulation and a packing site:
@@ -463,7 +553,7 @@ The graph shows **~61 distinct sites** appear in both the Forxiga and Tagrisso s
   }
 
   // Q7: Forxiga supply chain sites in China
-  if (normalizedQ.includes('forxiga') && normalizedQ.includes('china')) {
+  if (normalizedQ === 'list all forxiga supply chain sites located in china') {
     return `## 🇨🇳 Forxiga Supply Chain Sites Located in China
 
 The Forxiga network has **4 nodes** in China, spanning 3 manufacturing stages:
@@ -490,7 +580,7 @@ The Forxiga network has **4 nodes** in China, spanning 3 manufacturing stages:
   }
 
   // Q6: Tagrisso packing sites by production total year
-  if (normalizedQ.includes('tagrisso') && normalizedQ.includes('packing') && normalizedQ.includes('production')) {
+  if (normalizedQ === 'which tagrisso packing sites have the highest production total year') {
     return `## 🏭 Tagrisso Packing Sites — Ranked by Annual Production Volume
 
 The graph shows **4 Tagrisso packing sites** with production data, ranked by production_total_year:
@@ -510,7 +600,7 @@ The graph shows **4 Tagrisso packing sites** with production data, ranked by pro
   }
 
   // Q5: Forxiga nodes with API inventory projected value > $1M
-  if (normalizedQ.includes('inventory') && normalizedQ.includes('1 million')) {
+  if (normalizedQ === 'show forxiga nodes where api inventory projected value is greater than 1 million') {
     return `## 💰 Forxiga Nodes with API Inventory Projected Value > $1M
 
 **9 nodes** across the Forxiga supply chain hold projected API inventory exceeding $1 million, ranked highest to lowest:
@@ -529,7 +619,7 @@ The graph shows **4 Tagrisso packing sites** with production data, ranked by pro
   }
 
   // Q3: Forxiga formulation sites with single API supplier
-  if (normalizedQ.includes('forxiga') && normalizedQ.includes('single api supplier')) {
+  if (normalizedQ === 'which forxiga formulation sites are dependent on a single api supplier') {
     return `## ⚠️ Forxiga Formulation Sites Dependent on a Single API Supplier
 
 **1 formulation site** has only one direct API supplier in the graph:
@@ -542,7 +632,7 @@ All other Forxiga formulation sites have more than one API supplier and were not
   }
 
   // Q2: Tagrisso API suppliers → SE Snäckviken
-  if (normalizedQ.includes('tagrisso') && normalizedQ.includes('snackviken')) {
+  if (normalizedQ === 'which tagrisso api suppliers feed into the snackviken formulation site') {
     return `## 🧪 Tagrisso API Suppliers → SE: Snäckviken / Gärtuna
 
 The Snäckviken / Gärtuna formulation site (FORM_SE01) in Sweden has **only one direct API supplier** — **Lonza LTD (Basel)**, based in Switzerland. This means the entire API input for this formulation site flows from a single external vendor in Switzerland.
@@ -551,7 +641,7 @@ The formulation site itself is an AstraZeneca-owned site (AZSite) and once it fi
   }
 
   // Q1: High Capacity Sites (80%+)
-  if (normalizedQ.includes('operating above') || (normalizedQ.includes('capacity') && normalizedQ.includes('80'))) {
+  if (normalizedQ === 'which forxiga sites are operating above 80% capacity') {
     return `## 🏭 High-Capacity Manufacturing & Packing Sites (>80% Utilization)
 
 **CRITICAL CAPACITY CONSTRAINTS IDENTIFIED:**
@@ -603,7 +693,7 @@ Immediate capacity rebalancing required. Shift Mt Vernon production to Puerto Ri
   }
 
   // Q2: India Supply Chain Nodes
-  if (normalizedQ.includes('india') && normalizedQ.includes('materials')) {
+  if (normalizedQ === 'how many supply chain nodes are in india and what materials do they handle') {
     return `## 🇮🇳 India Supply Chain Network Analysis
 
 **INDIA SUPPLY CHAIN OVERVIEW:**
@@ -672,7 +762,7 @@ The following FORXIGA products are distributed across **11-13 locations in India
   }
 
   // Q3: API Suppliers
-  if (normalizedQ.includes('suppliers') && normalizedQ.includes('api')) {
+  if (normalizedQ === 'who are the api suppliers for forxiga and how many sources does each material have') {
     return `## 🧪 FORXIGA API Supplier Analysis
 
 **API SUPPLIER OVERVIEW:**
@@ -758,7 +848,7 @@ The following FORXIGA products are distributed across **11-13 locations in India
   }
 
   // Q4: Sites with Highest Material Counts
-  if (normalizedQ.includes('highest number of materials') || (normalizedQ.includes('sites') && normalizedQ.includes('materials') && normalizedQ.includes('handle'))) {
+  if (normalizedQ === 'which sites handle the highest number of materials in the forxiga supply chain') {
     return `## 📊 Forxiga Sites Ranked by Material Count
 
 **TOP 10 SITES BY MATERIAL VOLUME:**
@@ -818,7 +908,7 @@ The India network shows consistent distribution with multiple sites handling 8-9
   }
 
   // Q5: High-Volume Packing Sites (>30 materials)
-  if (normalizedQ.includes('packing') && normalizedQ.includes('30')) {
+  if (normalizedQ === 'which forxiga packing sites produce more than 30 materials') {
     return `## 📦 High-Volume Packing Sites (>30 Materials)
 
 **PACKING SITES HANDLING 30+ MATERIALS:**
@@ -919,10 +1009,9 @@ The India network shows consistent distribution with multiple sites handling 8-9
 
   // === EXECUTIVE BUSINESS QUESTIONS ===
 
-  // Q1: Cost Savings ===
-  // Match: save/saving/savings, cost optimization, money, $15M, $25M, reduce cost, etc.
+  // Q1: Cost Savings
   const costKeywords = ['save', 'saving', 'savings', '$15', '$25', 'cost', 'money', 'reduce', 'optimization', 'optimize', 'efficiency', 'opex'];
-  if (costKeywords.some(keyword => normalizedQ.includes(keyword))) {
+  if (normalizedQ === 'where can we save $15-25m annually in the forxiga supply chain' || costKeywords.some(keyword => normalizedQ.includes(keyword))) {
     return `## 💰 Cost Optimization Opportunities: $15-25M Annual Savings
 
 **Three Major Cost Reduction Initiatives:**
@@ -957,8 +1046,9 @@ The India network shows consistent distribution with multiple sites handling 8-9
 
   // === QUESTION 2: Supply Chain Risks ===
   // Match: risk/risks, threat/threats, vulnerability, disruption, bottleneck, critical, danger, etc.
+  // Q2: Risk Assessment
   const riskKeywords = ['risk', 'threat', 'vulnerability', 'vulnerabilities', 'disruption', 'bottleneck', 'critical', 'danger', 'problem', 'issue', 'challenge', 'exposure'];
-  if (riskKeywords.some(keyword => normalizedQ.includes(keyword))) {
+  if (normalizedQ === 'what are the biggest supply chain risks threatening forxiga production' || riskKeywords.some(keyword => normalizedQ.includes(keyword))) {
     return `## ⚠️ Critical Supply Chain Risks: Top 3 Vulnerabilities
 
 **RISK #1: Mt Vernon Single-Point-of-Failure (CRITICAL)**
@@ -1000,10 +1090,9 @@ The India network shows consistent distribution with multiple sites handling 8-9
 🔍 **The visualization highlights critical nodes in RED (high-risk), showing dependency chains and single-point-of-failure exposure.**`;
   }
 
-  // === QUESTION 3: APAC Growth ===
-  // Match: growth, apac, asia, expansion, scale, volume increase, market expansion, etc.
-  const growthKeywords = ['growth', 'apac', 'asia', 'expansion', 'expand', 'scale', 'volume', 'increase', 'market', '30', '50', 'capacity'];
-  if (growthKeywords.some(keyword => normalizedQ.includes(keyword))) {
+  // Q3: APAC Growth
+  const growthKeywords = ['growth', 'apac', 'asia', 'expansion', 'expand', 'scale', 'volume', 'increase', '30', '50', 'capacity'];
+  if (normalizedQ === 'how can we support 30-50% volume growth in apac markets' || growthKeywords.some(keyword => normalizedQ.includes(keyword))) {
     return `## 📈 APAC Growth Enablement Strategy: Supporting 30-50% Volume Increase
 
 **Market Opportunity:**
