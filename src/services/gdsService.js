@@ -39,16 +39,39 @@ export const createGdsProjection = async (jobId, nodes, relationships) => {
   // By default GDS nodeSimilarity uses OUTGOING edges only — nodes that only have
   // INCOMING edges (e.g. Distribution_Hub receiving supply) appear degree-0 and
   // return zero results. Making every relationship type UNDIRECTED fixes this.
-  const buildRelProjection = (types) => {
-    if (types.length === 0) {
-      // Wildcard: project all types as undirected
+  // All numeric properties found on actual relationship data are included so they
+  // can be referenced as weight properties at query time.
+  const buildRelProjection = (types, rels) => {
+    // Build a map of relType → Set of numeric property keys from actual data
+    const relPropMap = {};
+    rels.forEach(r => {
+      const t = r.type;
+      if (types.length > 0 && !types.includes(t)) return;
+      if (!relPropMap[t]) relPropMap[t] = new Set();
+      Object.entries(r.properties || {}).forEach(([k, v]) => {
+        if (typeof v === 'number') relPropMap[t].add(k);
+      });
+    });
+
+    const effectiveTypes = types.length > 0 ? types : Object.keys(relPropMap);
+
+    if (effectiveTypes.length === 0) {
       return { all: { type: '*', orientation: 'UNDIRECTED' } };
     }
+
     const proj = {};
-    types.forEach(t => { proj[t] = { type: t, orientation: 'UNDIRECTED' }; });
+    effectiveTypes.forEach(t => {
+      proj[t] = { type: t, orientation: 'UNDIRECTED' };
+      const props = relPropMap[t];
+      if (props && props.size > 0) {
+        const propProjection = {};
+        props.forEach(p => { propProjection[p] = { property: p, defaultValue: 1.0 }; });
+        proj[t].properties = propProjection;
+      }
+    });
     return proj;
   };
-  const relProjection = buildRelProjection(relTypes);
+  const relProjection = buildRelProjection(relTypes, relationships);
 
   const driver = initDriver();
   const session = driver.session({ database: NEO4J_DATABASE });

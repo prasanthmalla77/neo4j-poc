@@ -150,11 +150,11 @@ export const shortestPathConfig = {
 
     weightProperty: {
       label: 'Weight Property',
-      type: 'text',
+      type: 'select',
       required: false,
       default: '',
-      placeholder: 'e.g., distance, cost, duration',
-      helpText: 'Relationship property to use as weight (leave empty for unweighted)'
+      options: [], // Populated dynamically from selected relationship types
+      helpText: 'Relationship property to use as edge weight — leave empty for unweighted (shortest by hops)'
     },
 
     relationshipFilter: {
@@ -348,6 +348,19 @@ export const populateDynamicOptions = (algorithmId, graphData, currentConfig = {
     }
     if (param.type === 'multiselect' && key === 'relationshipFilter') {
       param.options = relationshipTypes;
+    }
+    if (key === 'weightProperty' && param.type === 'select') {
+      const selectedRelTypes = currentConfig.relationshipFilter || [];
+      const activeRels = selectedRelTypes.length > 0
+        ? graphData.relationships.filter(r => selectedRelTypes.includes(r.type))
+        : graphData.relationships;
+      const relPropKeys = [...new Set(
+        activeRels.flatMap(r => Object.keys(r.properties || {}))
+      )].sort();
+      param.options = [
+        { value: '', label: '— None (shortest by hops) —' },
+        ...relPropKeys.map(k => ({ value: k, label: k })),
+      ];
     }
   });
 

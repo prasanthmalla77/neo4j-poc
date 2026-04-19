@@ -398,14 +398,17 @@ async function createNodeConnections(session, sourceNodeId, connections, validId
             continue;
         }
 
+        const transport_lead_time = Math.floor(Math.random() * 10) + 1;
+
         const query = `
             MATCH (source {id: $sourceNodeId, brand: $brand})
             MATCH (target {id: $targetNodeId, brand: $brand})
-            MERGE (source)-[:SUPPLIES_TO {brand: $brand}]->(target)
+            MERGE (source)-[r:SUPPLIES_TO {brand: $brand}]->(target)
+            SET r.transport_lead_time = $transport_lead_time
         `;
 
         try {
-            await session.run(query, { sourceNodeId, targetNodeId, brand: BRAND });
+            await session.run(query, { sourceNodeId, targetNodeId, brand: BRAND, transport_lead_time });
             created++;
         } catch (error) {
             console.log(`  Warning: Could not create connection from ${sourceNodeId} to ${targetNodeId}`);

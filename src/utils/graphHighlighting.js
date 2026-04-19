@@ -31,8 +31,14 @@ export const convertToNvlNode = (node) => {
   // Get the Neo4j label for coloring
   const nodeLabel = node.labels && node.labels.length > 0 ? node.labels[0] : 'Unknown';
 
-  // Use LABELS property if available, otherwise fall back to Neo4j label
-  const caption = node.properties?.LABELS || nodeLabel;
+  // Caption = "<GraphLabel>_<labels property>" when the `labels` property exists,
+  // e.g. "Intermediate_BMS587319, Novasep, France".
+  // Falls back to site_name / vendor_name / id / graph label when not available.
+  const props = node.properties || {};
+  const labelsTag = props.labels || props.LABELS || '';
+  const caption = labelsTag
+    ? `${nodeLabel}_${labelsTag}`
+    : props.site_name || props.vendor_name || props.name || props.id || nodeLabel;
 
   return {
     id: node.id,

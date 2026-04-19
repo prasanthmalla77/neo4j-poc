@@ -26,6 +26,9 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
     if (paramKey === 'targetNodeLabel') {
       // Clear previously selected properties when label changes
       setConfig(prev => ({ ...prev, [paramKey]: value, targetProperties: [] }));
+    } else if (paramKey === 'relationshipFilter') {
+      // Clear weight property when relationship filter changes — options will repopulate
+      setConfig(prev => ({ ...prev, [paramKey]: value, weightProperty: '' }));
     } else {
       setConfig(prev => ({ ...prev, [paramKey]: value }));
     }
