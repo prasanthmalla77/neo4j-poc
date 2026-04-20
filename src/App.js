@@ -16,7 +16,7 @@ function App() {
             onClick={() => setActiveTab('graph')}
           >
             <span className="tab-icon">📊</span>
-            Graph View & Algorithms
+            Brand View - Graph & Algorithms
           </button>
           <button
             className={`tab-button ${activeTab === 'chat' ? 'active' : ''}`}

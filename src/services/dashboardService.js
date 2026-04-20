@@ -291,7 +291,7 @@ export const getStatsCards = (currentResults) => {
 
         if (result.totalCost) {
           cards.push({
-            title: 'Total Cost',
+            title: 'Total Hours',
             value: Math.round(result.totalCost),
             icon: '💰',
             color: '#FF9800'

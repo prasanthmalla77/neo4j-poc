@@ -328,7 +328,7 @@ const AlgorithmResults = ({ results, onHighlight, onClearHighlight, onExport }) 
                     </div>
                     {result.totalCost > 0 && (
                       <div className="path-cost">
-                        Total Cost: <strong>{result.totalCost.toFixed(2)}</strong>
+                        Total Hours: <strong>{result.totalCost.toFixed(2)}</strong>
                       </div>
                     )}
                     <div className="result-actions-inline">
@@ -356,7 +356,14 @@ const AlgorithmResults = ({ results, onHighlight, onClearHighlight, onExport }) 
                           <span className="node-index">{idx + 1}</span>
                           <span className="node-label">{node.labels[0]}</span>
                           <span className="node-name">
-                            {toDisplayValue(node.properties?.name) || toDisplayValue(node.id)}
+                            {(() => {
+                              if (node.caption) return node.caption;
+                              const props = node.properties || {};
+                              const labelsTag = props.labels || props.LABELS || '';
+                              return labelsTag
+                                ? `${node.labels?.[0] || ''}_${labelsTag}`
+                                : props.site_name || props.vendor_name || props.name || props.id || node.id;
+                            })()}
                           </span>
                         </div>
                       ))}
@@ -392,21 +399,24 @@ const AlgorithmResults = ({ results, onHighlight, onClearHighlight, onExport }) 
   const renderBetweennessResults = () => {
     const allResults = results.results;
     const maxScore   = allResults[0]?.score || 1;
-    const totalScore = allResults.reduce((s, r) => s + r.score, 0);
     const isNorm     = results.stats?.normalized;
+    const n          = results.stats?.nodeCount || allResults.length;
+    const denom      = n > 2 ? ((n - 1) * (n - 2)) / 2 : 1;
 
     // Criticality Index: 0–100, relative to the top node. Always interpretable.
     const critIndex = (score) => Math.round((score / maxScore) * 100);
 
-    // % of all routes this node sits on (share of total betweenness)
-    const routeShare = (score) =>
-      totalScore > 0 ? ((score / totalScore) * 100).toFixed(1) + '%' : '0%';
+    // % of all routes this node sits on — uses same rounded count as rawLabel
+    const routeShare = (score) => {
+      const rawCount = isNorm ? Math.round(score * denom) : Math.round(score);
+      return denom > 0 ? ((rawCount / denom) * 100).toFixed(1) + '%' : '0%';
+    };
 
-    // Raw score label — humanises what the number actually counts
-    const rawLabel = (score) =>
-      isNorm
-        ? (score * 100).toFixed(3) + '% of paths'
-        : Math.round(score).toLocaleString() + ' routes';
+    // Actual number of shortest paths this node sits on, out of total possible
+    const rawLabel = (score) => {
+      const rawCount = isNorm ? Math.round(score * denom) : Math.round(score);
+      return rawCount.toLocaleString() + ' of ' + Math.round(denom).toLocaleString() + ' routes';
+    };
 
     const riskTier = (score) => {
       const t = maxScore > 0 ? score / maxScore : 0;

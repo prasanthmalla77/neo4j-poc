@@ -244,6 +244,7 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
       // Lazily create (or recreate) the GDS projection using current graph data
       const currentNodes = graphData.nodes.map(n => ({
         id: n.id,
+        caption: n.caption,
         labels: n.labels || [],
         properties: n.properties || {},
       }));
@@ -444,7 +445,7 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
           csvContent += `${r.node1},${r.node2},${r.score}\n`;
         });
       } else if (results.algorithmType === ALGORITHM_TYPES.SHORTEST_PATH) {
-        csvContent = 'Source,Target,Path Length,Total Cost,Path\n';
+        csvContent = 'Source,Target,Path Length,Total Hours,Path\n';
         results.results.forEach(r => {
           csvContent += `${r.sourceNode},${r.targetNode},${r.pathLength},${r.totalCost},"${r.pathDescription}"\n`;
         });

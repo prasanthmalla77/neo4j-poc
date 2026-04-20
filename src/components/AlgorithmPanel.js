@@ -214,15 +214,15 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
             >
               <option value="">Select {param.label}</option>
               {graphData.nodes.map(node => {
-                const dataId = node.properties?.id || '';
-                const siteName = node.properties?.site_name || node.properties?.vendor_name || '';
-                const label = node.labels?.[0] || '';
-                const display = dataId
-                  ? (siteName ? `${dataId} — ${siteName} (${label})` : `${dataId} (${label})`)
-                  : `${node.id} (${label})`;
+                const props = node.properties || {};
+                const nodeLabel = node.labels?.[0] || '';
+                const labelsTag = props.labels || props.LABELS || '';
+                const caption = labelsTag
+                  ? `${nodeLabel}_${labelsTag}`
+                  : props.site_name || props.vendor_name || props.name || props.id || nodeLabel;
                 return (
-                  <option key={node.id} value={node.id} title={display}>
-                    {display}
+                  <option key={node.id} value={node.id}>
+                    {caption}
                   </option>
                 );
               })}

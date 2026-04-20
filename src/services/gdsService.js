@@ -335,7 +335,63 @@ export const runShortestPath = async (projectionName, config) => {
   } = config;
 
   const { nodes, relationships } = projection;
+
+  // Create a temporary DIRECTED (NATURAL) projection for shortest path
+  const directedProjName = `${projectionName}_directed`;
+  const relTypes = [...new Set(relationships.map(r => r.type))].filter(Boolean);
+
+  // Build directed projection including all numeric properties so weight props are available
+  const buildDirectedRelProjection = (types, rels) => {
+    const relPropMap = {};
+    rels.forEach(r => {
+      const t = r.type;
+      if (types.length > 0 && !types.includes(t)) return;
+      if (!relPropMap[t]) relPropMap[t] = new Set();
+      Object.entries(r.properties || {}).forEach(([k, v]) => {
+        if (typeof v === 'number') relPropMap[t].add(k);
+      });
+    });
+    const effectiveTypes = types.length > 0 ? types : Object.keys(relPropMap);
+    if (effectiveTypes.length === 0) {
+      return { all: { type: '*', orientation: 'NATURAL' } };
+    }
+    const proj = {};
+    effectiveTypes.forEach(t => {
+      proj[t] = { type: t, orientation: 'NATURAL' };
+      const props = relPropMap[t];
+      if (props && props.size > 0) {
+        const propProjection = {};
+        props.forEach(p => { propProjection[p] = { property: p, defaultValue: 1.0 }; });
+        proj[t].properties = propProjection;
+      }
+    });
+    return proj;
+  };
+  const directedRelProjection = buildDirectedRelProjection(relTypes, relationships);
+  const nodeLabels = [...new Set(nodes.flatMap(n => n.labels || []))].filter(Boolean);
+
   const driver = initDriver();
+  const setupSession = driver.session({ database: NEO4J_DATABASE });
+  try {
+    await setupSession.run('CALL gds.graph.drop($name, false) YIELD graphName', { name: directedProjName });
+  } catch (_) { /* not present - fine */ }
+  try {
+    if (nodeLabels.length === 0) {
+      await setupSession.run(
+        "CALL gds.graph.project($name, '*', $relProjection) YIELD graphName",
+        { name: directedProjName, relProjection: directedRelProjection }
+      );
+    } else {
+      await setupSession.run(
+        'CALL gds.graph.project($name, $nodeLabels, $relProjection) YIELD graphName',
+        { name: directedProjName, nodeLabels, relProjection: directedRelProjection }
+      );
+    }
+  } finally {
+    await setupSession.close();
+  }
+
+  const activeProjName = directedProjName;
   const session = driver.session({ database: NEO4J_DATABASE });
   const weightClause = weightProperty ? `, relationshipWeightProperty: $weightProp` : '';
 
@@ -356,7 +412,7 @@ export const runShortestPath = async (projectionName, config) => {
          YIELD index, nodeIds, totalCost
          RETURN index, [nid IN nodeIds | toString(nid)] AS nodeIds, totalCost
          ORDER BY index`,
-        { sourceId: sourceNode, targetId: targetNode, projName: projectionName, kPaths: neo4j.int(kPaths), weightProp: weightProperty }
+        { sourceId: sourceNode, targetId: targetNode, projName: activeProjName, kPaths: neo4j.int(kPaths), weightProp: weightProperty }
       );
       records = result.records;
     } else if (algorithm === 'astar') {
@@ -373,7 +429,7 @@ export const runShortestPath = async (projectionName, config) => {
          YIELD index, nodeIds, totalCost
          RETURN index, [nid IN nodeIds | toString(nid)] AS nodeIds, totalCost
          ORDER BY index`,
-        { sourceId: sourceNode, targetId: targetNode, projName: projectionName, weightProp: weightProperty }
+        { sourceId: sourceNode, targetId: targetNode, projName: activeProjName, weightProp: weightProperty }
       );
       records = result.records;
     } else {
@@ -389,7 +445,7 @@ export const runShortestPath = async (projectionName, config) => {
          YIELD index, nodeIds, totalCost
          RETURN index, [nid IN nodeIds | toString(nid)] AS nodeIds, totalCost
          ORDER BY index`,
-        { sourceId: sourceNode, targetId: targetNode, projName: projectionName, weightProp: weightProperty }
+        { sourceId: sourceNode, targetId: targetNode, projName: activeProjName, weightProp: weightProperty }
       );
       records = result.records;
     }
@@ -412,6 +468,13 @@ export const runShortestPath = async (projectionName, config) => {
     };
   } finally {
     await session.close();
+    // Drop the temporary directed projection
+    const cleanupSession = driver.session({ database: NEO4J_DATABASE });
+    try {
+      await cleanupSession.run('CALL gds.graph.drop($name, false) YIELD graphName', { name: directedProjName });
+    } catch (_) { /* ignore */ } finally {
+      await cleanupSession.close();
+    }
   }
 };
 
@@ -437,9 +500,16 @@ const _buildPathResult = (nodeIds, totalCost, sourceNode, targetNode, nodes, rel
     relationships: pathRels,
     pathLength: nodeIds.length - 1,
     totalCost,
-    pathDescription: pathNodes.map(n =>
-      n.properties?.site_name || n.properties?.vendor_name || n.properties?.id || n.id
-    ).join(' → '),
+    pathDescription: pathNodes.map(n => {
+      const props = n.properties || {};
+      const nodeLabel = n.labels?.[0] || '';
+      // Use caption if present (set by convertToNvlNode), otherwise recompute
+      if (n.caption) return n.caption;
+      const labelsTag = props.labels || props.LABELS || '';
+      return labelsTag
+        ? `${nodeLabel}_${labelsTag}`
+        : props.site_name || props.vendor_name || props.name || props.id || nodeLabel;
+    }).join(' → '),
   };
 };
 
@@ -596,6 +666,7 @@ export const runBetweenness = async (projectionName, config) => {
     stats: {
       nodesScored: scoreMap.size,
       normalized: isNormalized,
+      nodeCount: n,
       usedGds,
       topNode: topNodeName,
       topScore: topResult?.score ?? 0,
