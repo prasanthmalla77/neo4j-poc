@@ -299,9 +299,14 @@ const ChatQuery = () => {
   // Hardcoded questions from chatService.js - User can ONLY click these
   const sampleQuestions = [
     {
-      text: "which tagrisso api suppliers feed into the snackviken formulation site",
-      icon: "🧪",
-      description: "Tagrisso API Suppliers → SE Snäckviken"
+      text: "top 2 brands in china market and their end to end supply chain",
+      icon: "🏆",
+      description: "Top 2 Brands China E2E Supply Chain"
+    },
+    {
+      text: "which forxiga formulation sites supply to more than 5 downstream nodes",
+      icon: "🔗",
+      description: "Forxiga High-Connectivity Formulation Sites"
     },
     {
       text: "which forxiga formulation sites are dependent on a single api supplier",
@@ -309,9 +314,9 @@ const ChatQuery = () => {
       description: "Forxiga Single-Source API Risk"
     },
     {
-      text: "which tagrisso nodes are external vendor sites and what countries are they in",
-      icon: "🌍",
-      description: "Tagrisso External Vendor Sites"
+      text: "which tagrisso api suppliers feed into the snackviken formulation site",
+      icon: "🧪",
+      description: "Tagrisso API Suppliers → SE Snäckviken"
     },
     {
       text: "show forxiga nodes where api inventory projected value is greater than 1 million",
@@ -322,6 +327,11 @@ const ChatQuery = () => {
       text: "which tagrisso packing sites have the highest production total year",
       icon: "📦",
       description: "Tagrisso Top Packing Production"
+    },
+    {
+      text: "which tagrisso nodes are external vendor sites and what countries are they in",
+      icon: "🌍",
+      description: "Tagrisso External Vendor Sites"
     },
     {
       text: "list all forxiga supply chain sites located in china",
@@ -342,16 +352,6 @@ const ChatQuery = () => {
       text: "show all customer markets supplied by forxiga packing sites",
       icon: "🏪",
       description: "Forxiga Customer Markets"
-    },
-    {
-      text: "which forxiga formulation sites supply to more than 5 downstream nodes",
-      icon: "🔗",
-      description: "Forxiga High-Connectivity Formulation Sites"
-    },
-    {
-      text: "top 2 brands in china market and their end to end supply chain",
-      icon: "🏆",
-      description: "Top 2 Brands China E2E Supply Chain"
     }
   ];
 

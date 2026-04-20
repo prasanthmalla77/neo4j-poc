@@ -30,6 +30,22 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
   // eslint-disable-next-line no-unused-vars
   const [graphConfig, setGraphConfig] = useState({ nodeLabels: [], relationshipTypes: [] });
   const [isLoadingConfig, setIsLoadingConfig] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Close fullscreen on Escape key; trigger NVL resize when entering fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e) => { if (e.key === 'Escape') setIsFullscreen(false); };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    // Give the DOM a frame to apply the new dimensions, then tell NVL to resize
+    const t = setTimeout(() => {
+      if (nvlRef.current?.fit) nvlRef.current.fit();
+    }, 50);
+    return () => clearTimeout(t);
+  }, [isFullscreen]);
 
   // Handle external data from chat query
   useEffect(() => {
@@ -640,13 +656,29 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
         <div className="graph-view-container">
           <div
             className="neo4j-graph-container"
-            style={{
+            style={isFullscreen ? {
+              position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+              zIndex: 9999, background: '#1a1a1a', display: 'flex', flexDirection: 'column'
+            } : {
               height: '600px',
               position: 'relative',
               overflow: 'hidden',
             }}
           >
-            <div className="nvl-container">
+            {/* Fullscreen toggle button */}
+            <button
+              onClick={() => setIsFullscreen(f => !f)}
+              title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Expand to fullscreen'}
+              style={{
+                position: 'absolute', top: '10px', right: '10px', zIndex: 10000,
+                background: 'rgba(0,0,0,0.55)', color: 'white', border: '1px solid rgba(255,255,255,0.3)',
+                borderRadius: '6px', padding: '6px 10px', cursor: 'pointer',
+                fontSize: '16px', lineHeight: 1, backdropFilter: 'blur(4px)'
+              }}
+            >
+              {isFullscreen ? '✕' : '⛶'}
+            </button>
+            <div className="nvl-container" style={isFullscreen ? { flex: 1, height: '100%' } : {}}>
               <InteractiveNvlWrapper
                 nodes={graphData.nodes}
                 rels={graphData.relationships}
@@ -655,6 +687,49 @@ const GraphVisualization = ({ externalJobData = null, externalGraphData = null }
                 mouseEventCallbacks={mouseEventCallbacks}
               />
             </div>
+
+            {/* Node/Relationship Details Panel — shown inside fullscreen container */}
+            {isFullscreen && selectedItem && (
+              <div className="details-panel" style={{
+                position: 'absolute', bottom: 0, left: 0, right: 0,
+                zIndex: 10001, maxHeight: '40%', overflowY: 'auto'
+              }}>
+                <div className="details-panel-header">
+                  <h3 className="details-panel-title">
+                    {selectedItem.type === 'node' ? 'Node Details' : 'Relationship Details'}
+                  </h3>
+                  <button onClick={() => setSelectedItem(null)} className="neo4j-close-button">×</button>
+                </div>
+                <div className="details-panel-content">
+                  {selectedItem.type === 'node' ? (
+                    <div className="details-grid">
+                      <div className="detail-item"><span className="detail-label">ID:</span><span className="detail-value">{selectedItem.data.id}</span></div>
+                      <div className="detail-item"><span className="detail-label">Labels:</span><span className="detail-value">{selectedItem.data.labels.join(', ')}</span></div>
+                      <div className="detail-item"><span className="detail-label">Name:</span><span className="detail-value">{selectedItem.data.caption}</span></div>
+                      {selectedItem.data.properties && Object.entries(selectedItem.data.properties).map(([key, value]) => (
+                        <div key={key} className="detail-item">
+                          <span className="detail-label">{key}:</span>
+                          <span className="detail-value">{Array.isArray(value) ? value.join(', ') : String(value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="details-grid">
+                      <div className="detail-item"><span className="detail-label">ID:</span><span className="detail-value">{selectedItem.data.id}</span></div>
+                      <div className="detail-item"><span className="detail-label">Type:</span><span className="detail-value">{selectedItem.data.caption}</span></div>
+                      <div className="detail-item"><span className="detail-label">From:</span><span className="detail-value">{selectedItem.data.from}</span></div>
+                      <div className="detail-item"><span className="detail-label">To:</span><span className="detail-value">{selectedItem.data.to}</span></div>
+                      {selectedItem.data.properties && Object.entries(selectedItem.data.properties).map(([key, value]) => (
+                        <div key={key} className="detail-item">
+                          <span className="detail-label">{key}:</span>
+                          <span className="detail-value">{String(value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Legend */}

@@ -31,6 +31,7 @@ export const createGdsProjection = async (jobId, nodes, relationships) => {
   const projectionName = `graph_gds_${crypto.randomUUID()}`;
 
   // Cache node/rel data locally for result enrichment
+  // gdsNodeCount will be updated after projection creation with the actual GDS count
   activeProjections.set(projectionName, { name: projectionName, jobId, nodes, relationships });
 
   const relTypes = [...new Set(relationships.map(r => r.type))].filter(Boolean);
@@ -99,6 +100,10 @@ export const createGdsProjection = async (jobId, nodes, relationships) => {
     const rec = result.records[0];
     const nodeCount         = toNum(rec.get('nodeCount'));
     const relationshipCount = toNum(rec.get('relationshipCount'));
+
+    // Update projection registry with actual GDS node count for accurate betweenness denominator
+    const stored = activeProjections.get(projectionName);
+    if (stored) stored.gdsNodeCount = nodeCount;
 
     console.log(`[GDS] Projection created: ${projectionName} - ${nodeCount} nodes, ${relationshipCount} rels`);
 
@@ -626,12 +631,12 @@ export const runBetweenness = async (projectionName, config) => {
   }
 
   // Normalise: divide raw score by (n-1)(n-2)/2  (undirected formula)
-  // Only score nodes that exist in the current filtered projection (not all nodes in Neo4j).
-  // GDS projects by label, so it can include nodes outside the UI-filtered set.
+  // Use the GDS projection's actual node count (scoreMap.size) so that raw scores
+  // — which were computed over the full projection — never exceed the denominator.
   const validNodeIds = new Set(nodes.map(n => String(n.id)));
 
-  const n = nodes.length;
-  const denominator = n > 2 ? ((n - 1) * (n - 2)) / 2 : 1;
+  const gdsN = projection.gdsNodeCount || scoreMap.size;
+  const denominator = gdsN > 2 ? ((gdsN - 1) * (gdsN - 2)) / 2 : 1;
 
   const finalScores = new Map();
   scoreMap.forEach((rawScore, nodeId) => {
@@ -666,7 +671,7 @@ export const runBetweenness = async (projectionName, config) => {
     stats: {
       nodesScored: scoreMap.size,
       normalized: isNormalized,
-      nodeCount: n,
+      nodeCount: gdsN,
       usedGds,
       topNode: topNodeName,
       topScore: topResult?.score ?? 0,
