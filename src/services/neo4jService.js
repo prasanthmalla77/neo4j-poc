@@ -3,12 +3,13 @@
 
 import neo4j from 'neo4j-driver';
 
-// Neo4j connection configuration — loaded from environment variables (.env.local)
+// Neo4j connection configuration — AZ keys take priority over local fallbacks
 const NEO4J_CONFIG = {
-  uri: process.env.REACT_APP_NEO4J_URI || 'bolt://localhost:7687',
-  username: process.env.REACT_APP_NEO4J_USERNAME || 'neo4j',
-  password: process.env.REACT_APP_NEO4J_PASSWORD || '',
-  database: process.env.REACT_APP_NEO4J_DATABASE || 'neo4j'
+  uri: process.env.REACT_APP_AZ_NEO4J_URI || process.env.REACT_APP_NEO4J_URI || 'bolt://localhost:7687',
+  username: process.env.REACT_APP_AZ_NEO4J_USERNAME || process.env.REACT_APP_NEO4J_USERNAME || 'neo4j',
+  password: process.env.REACT_APP_AZ_NEO4J_PASSWORD || process.env.REACT_APP_NEO4J_PASSWORD || '',
+  database: process.env.REACT_APP_AZ_NEO4J_DATABASE || process.env.REACT_APP_NEO4J_DATABASE || 'neo4j',
+  authority: process.env.REACT_APP_AZ_NEO4J_AUTHORITY || null
 };
 
 let driver = null;

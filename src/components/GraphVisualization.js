@@ -12,7 +12,7 @@ import GraphConfigModal from './GraphConfigModal';
 import './GraphVisualization.css';
 
 // Toggle between mock and real Neo4j data
-const USE_REAL_NEO4J = true; // Set to false to use mock data
+const USE_REAL_NEO4J = true;
 
 const GraphVisualization = ({ externalJobData = null, externalGraphData = null }) => {
   const nvlRef = useRef(null);
