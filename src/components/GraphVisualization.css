@@ -28,6 +28,22 @@
   }
 }
 
+/* Spinner animation */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Pulse animation for configure button */
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(255, 152, 0, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(255, 152, 0, 0);
+  }
+}
+
 .side-panel {
   animation: slideIn 0.3s ease;
 }
@@ -260,6 +276,34 @@
   gap: 20px;
   position: sticky;
   top: 20px;
+  min-height: 200px;
+}
+
+.algo-running-overlay {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f0f6ff;
+  border: 1px solid #b3d1f7;
+  border-radius: 8px;
+  padding: 16px 20px;
+  font-size: 14px;
+  color: #0B6FCC;
+  font-weight: 500;
+}
+
+.algo-running-spinner {
+  width: 18px;
+  height: 18px;
+  border: 3px solid #b3d1f7;
+  border-top-color: #0B6FCC;
+  border-radius: 50%;
+  animation: algo-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes algo-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Details Panel (Bottom) */

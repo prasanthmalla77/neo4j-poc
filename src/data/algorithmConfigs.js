@@ -3,56 +3,56 @@
 
 export const ALGORITHM_TYPES = {
   NODE_SIMILARITY: 'nodeSimilarity',
-  SHORTEST_PATH: 'shortestPath'
+  SHORTEST_PATH: 'shortestPath',
+  BETWEENNESS: 'betweenness'
 };
 
 // Node Similarity Algorithm Configuration
 export const nodeSimilarityConfig = {
   id: 'nodeSimilarity',
   name: 'Node Similarity',
-  description: 'Computes similarity between nodes based on their neighborhoods and properties',
+  description: 'Computes similarity between nodes in the graph',
   category: 'similarity',
 
   // Configuration parameters
   parameters: {
-    similarityMetric: {
-      label: 'Similarity Metric',
+    similarityMode: {
+      label: 'Similarity Mode',
       type: 'select',
       required: true,
-      default: 'jaccard',
+      default: 'neighbours',
       options: [
         {
-          value: 'jaccard',
-          label: 'Jaccard',
-          description: 'Measures similarity as intersection over union of neighbors'
+          value: 'neighbours',
+          label: 'Similar Neighbours',
+          description: 'Finds nodes that share the most common connections (Jaccard on shared neighbors)'
         },
         {
-          value: 'overlap',
-          label: 'Overlap',
-          description: 'Measures similarity as intersection over minimum set size'
-        },
-        {
-          value: 'cosine',
-          label: 'Cosine',
-          description: 'Measures similarity using cosine of the angle between vectors'
-        },
-        {
-          value: 'pearson',
-          label: 'Pearson',
-          description: 'Measures linear correlation between nodes'
+          value: 'properties',
+          label: 'Similar Properties',
+          description: 'Finds nodes whose property feature vectors point in the same direction (Cosine similarity)'
         }
       ],
-      helpText: 'The metric used to compute similarity between nodes'
+      helpText: 'Choose how similarity is measured between nodes'
     },
 
-    topK: {
-      label: 'Top K Results',
-      type: 'number',
+    targetNodeLabel: {
+      label: 'Node Label to Compare',
+      type: 'select',
       required: true,
-      default: 10,
-      min: 1,
-      max: 100,
-      helpText: 'Number of most similar nodes to return for each node'
+      default: '',
+      options: [], // Populated dynamically from graph
+      helpText: 'Only nodes with this label will be compared'
+    },
+
+    targetProperties: {
+      label: 'Properties to Consider',
+      type: 'multiselect',
+      required: false,
+      default: [],
+      options: [], // Populated dynamically based on selected targetNodeLabel
+      helpText: 'Which node properties to match (leave empty = use all)',
+      showWhen: { similarityMode: 'properties' }
     },
 
     similarityThreshold: {
@@ -63,25 +63,7 @@ export const nodeSimilarityConfig = {
       min: 0,
       max: 1,
       step: 0.01,
-      helpText: 'Minimum similarity score (0-1) to include in results'
-    },
-
-    nodeFilter: {
-      label: 'Node Filter',
-      type: 'multiselect',
-      required: false,
-      default: [],
-      options: [], // Will be populated dynamically from available node labels
-      helpText: 'Filter by node labels (leave empty for all nodes)'
-    },
-
-    relationshipFilter: {
-      label: 'Relationship Types',
-      type: 'multiselect',
-      required: false,
-      default: [],
-      options: [], // Will be populated dynamically from available relationship types
-      helpText: 'Consider only these relationship types (leave empty for all)'
+      helpText: 'Minimum similarity score (0–1) to include in results'
     },
 
     degreeCutoff: {
@@ -90,18 +72,28 @@ export const nodeSimilarityConfig = {
       required: false,
       default: 1,
       min: 1,
-      helpText: 'Minimum number of relationships a node must have to be included'
+      helpText: 'Minimum number of relationships a node must have to be included',
+      showWhen: { similarityMode: 'neighbours' }
+    },
+
+    relationshipFilter: {
+      label: 'Relationship Types',
+      type: 'multiselect',
+      required: false,
+      default: [],
+      options: [], // Populated dynamically from graph
+      helpText: 'Consider only these relationship types when comparing neighbours (leave empty for all)'
     }
   },
 
   // Default configuration
   defaultConfig: {
-    similarityMetric: 'jaccard',
-    topK: 10,
+    similarityMode: 'neighbours',
+    targetNodeLabel: '',
+    targetProperties: [],
     similarityThreshold: 0.5,
-    nodeFilter: [],
-    relationshipFilter: [],
-    degreeCutoff: 1
+    degreeCutoff: 1,
+    relationshipFilter: []
   },
 
   // Expected output structure
@@ -148,11 +140,6 @@ export const shortestPathConfig = {
           description: 'Classic shortest path algorithm with optional weights'
         },
         {
-          value: 'astar',
-          label: 'A* (A-Star)',
-          description: 'Heuristic-based algorithm, faster for spatial data'
-        },
-        {
           value: 'yens',
           label: "Yen's K-Shortest Paths",
           description: 'Finds K alternative shortest paths'
@@ -163,11 +150,11 @@ export const shortestPathConfig = {
 
     weightProperty: {
       label: 'Weight Property',
-      type: 'text',
+      type: 'select',
       required: false,
       default: '',
-      placeholder: 'e.g., distance, cost, duration',
-      helpText: 'Relationship property to use as weight (leave empty for unweighted)'
+      options: [], // Populated dynamically from selected relationship types
+      helpText: 'Relationship property to use as edge weight — leave empty for unweighted (shortest by hops)'
     },
 
     relationshipFilter: {
@@ -219,10 +206,57 @@ export const shortestPathConfig = {
   }
 };
 
+// Betweenness Centrality Algorithm Configuration
+export const betweennessConfig = {
+  id: 'betweenness',
+  name: 'Betweenness Centrality',
+  description: 'Counts how many shortest paths between all node pairs pass through each node — identifies single points of failure',
+  category: 'centrality',
+
+  parameters: {
+    normalized: {
+      label: 'Normalise Scores',
+      type: 'select',
+      required: true,
+      default: 'true',
+      options: [
+        {
+          value: 'true',
+          label: 'Yes — scale to 0–1',
+          description: 'Divides each score by (n−1)(n−2)/2, making results comparable across different graph sizes'
+        }
+      ],
+      helpText: 'Normalised scores allow comparison across different graph sizes'
+    },
+
+    samplingRatio: {
+      label: 'Sampling Ratio',
+      type: 'number',
+      required: false,
+      default: 1.0,
+      min: 0.01,
+      max: 1.0,
+      step: 0.01,
+      helpText: 'Fraction of nodes used as sources when calling Neo4j GDS (1.0 = exact). Ignored when running in-memory.'
+    }
+  },
+
+  defaultConfig: {
+    normalized: 'true',
+    samplingRatio: 1.0
+  },
+
+  outputSchema: {
+    type: 'centrality-scores',
+    fields: ['nodeId', 'score', 'rank']
+  }
+};
+
 // Map of all algorithm configurations
 export const algorithmConfigs = {
   [ALGORITHM_TYPES.NODE_SIMILARITY]: nodeSimilarityConfig,
-  [ALGORITHM_TYPES.SHORTEST_PATH]: shortestPathConfig
+  [ALGORITHM_TYPES.SHORTEST_PATH]: shortestPathConfig,
+  [ALGORITHM_TYPES.BETWEENNESS]: betweennessConfig
 };
 
 // Helper function to get algorithm config by ID
@@ -269,8 +303,9 @@ export const validateAlgorithmConfig = (algorithmId, config) => {
   };
 };
 
-// Helper function to populate dynamic options (node labels, relationship types)
-export const populateDynamicOptions = (algorithmId, graphData) => {
+// Helper function to populate dynamic options (node labels, relationship types, per-label properties)
+// currentConfig is optional — used to derive property options for the currently selected node label
+export const populateDynamicOptions = (algorithmId, graphData, currentConfig = {}) => {
   const config = getAlgorithmConfig(algorithmId);
   if (!config) return config;
 
@@ -279,27 +314,53 @@ export const populateDynamicOptions = (algorithmId, graphData) => {
   // Extract unique node labels
   const nodeLabels = [...new Set(
     graphData.nodes.flatMap(node => node.labels)
-  )].map(label => ({
-    value: label,
-    label: label
-  }));
+  )].map(label => ({ value: label, label }));
 
   // Extract unique relationship types
   const relationshipTypes = [...new Set(
     graphData.relationships.map(rel => rel.type)
-  )].map(type => ({
-    value: type,
-    label: type
-  }));
+  )].map(type => ({ value: type, label: type }));
 
-  // Update options for node and relationship filters
+  // Build per-label property map: label -> sorted list of property keys
+  const labelPropertyMap = {};
+  graphData.nodes.forEach(node => {
+    (node.labels || []).forEach(lbl => {
+      if (!labelPropertyMap[lbl]) labelPropertyMap[lbl] = new Set();
+      Object.keys(node.properties || {}).forEach(k => labelPropertyMap[lbl].add(k));
+    });
+  });
+
   Object.keys(updatedConfig.parameters).forEach(key => {
     const param = updatedConfig.parameters[key];
+    if (key === 'targetNodeLabel') {
+      param.options = nodeLabels;
+    }
+    if (key === 'targetProperties') {
+      // Derive property options from the currently selected label
+      const selectedLabel = currentConfig.targetNodeLabel || '';
+      const propKeys = selectedLabel && labelPropertyMap[selectedLabel]
+        ? [...labelPropertyMap[selectedLabel]].sort()
+        : [...new Set(graphData.nodes.flatMap(n => Object.keys(n.properties || {})))].sort();
+      param.options = propKeys.map(k => ({ value: k, label: k }));
+    }
     if (param.type === 'multiselect' && key === 'nodeFilter') {
       param.options = nodeLabels;
     }
     if (param.type === 'multiselect' && key === 'relationshipFilter') {
       param.options = relationshipTypes;
+    }
+    if (key === 'weightProperty' && param.type === 'select') {
+      const selectedRelTypes = currentConfig.relationshipFilter || [];
+      const activeRels = selectedRelTypes.length > 0
+        ? graphData.relationships.filter(r => selectedRelTypes.includes(r.type))
+        : graphData.relationships;
+      const relPropKeys = [...new Set(
+        activeRels.flatMap(r => Object.keys(r.properties || {}))
+      )].sort();
+      param.options = [
+        { value: '', label: '— None (shortest by hops) —' },
+        ...relPropKeys.map(k => ({ value: k, label: k })),
+      ];
     }
   });
 

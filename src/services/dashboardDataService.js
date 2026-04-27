@@ -1,10 +1,11 @@
 import neo4j from 'neo4j-driver';
 
 const NEO4J_CONFIG = {
-  uri: 'bolt://localhost:7687',
-  username: 'neo4j',
-  password: '14071407',
-  database: 'test'
+  uri: process.env.REACT_APP_AZ_NEO4J_URI || process.env.REACT_APP_NEO4J_URI || 'bolt://localhost:7687',
+  username: process.env.REACT_APP_AZ_NEO4J_USERNAME || process.env.REACT_APP_NEO4J_USERNAME || 'neo4j',
+  password: process.env.REACT_APP_AZ_NEO4J_PASSWORD || process.env.REACT_APP_NEO4J_PASSWORD || '',
+  database: process.env.REACT_APP_AZ_NEO4J_DATABASE || process.env.REACT_APP_NEO4J_DATABASE || 'neo4j',
+  authority: process.env.REACT_APP_AZ_NEO4J_AUTHORITY || null
 };
 
 let driver = null;
@@ -43,198 +44,193 @@ export const fetchDashboardData = async (queryType = 'all') => {
     const nodeTypesResult = await runQuery('MATCH (n) RETURN labels(n)[0] as type, count(n) as count ORDER BY count DESC');
     const relationshipTypesResult = await runQuery('MATCH ()-[r]->() RETURN type(r) as type, count(r) as count ORDER BY count DESC');
 
-    // Context-specific KPIs
+    // Context-specific KPIs for Forxiga Supply Chain
     const totalMaterialsResult = await runQuery('MATCH (m:Material) RETURN count(m) as count');
-    const totalSitesResult = await runQuery('MATCH (s:Site) RETURN count(s) as count');
-    const totalMarketsResult = await runQuery('MATCH (m:Market) RETURN count(m) as count');
-    const totalInventoryResult = await runQuery('MATCH (ia:InventoryActuals) RETURN sum(ia.quantity) as total');
+    const totalFormulationSitesResult = await runQuery('MATCH (s:Formulation) RETURN count(s) as count');
+    const totalMarketsResult = await runQuery('MATCH (m:Customer_Market) RETURN count(m) as count');
+    const totalAPISitesResult = await runQuery('MATCH (api:API) RETURN count(api) as count');
+
+    // Inventory and Production totals
+    const totalInventoryVolumeResult = await runQuery(`
+      MATCH (n)-[:HAS_INVENTORY_DATA]->(inv:InventoryDataPoints)
+      RETURN sum(inv.inventory_volume_API) + sum(inv.inventory_volume_BULK) as total
+    `);
+    const totalProductionResult = await runQuery(`
+      MATCH (n)-[:HAS_PRODUCTION_DATA]->(prod:ProductionDataPoints)
+      RETURN sum(prod.production_actual) as total
+    `);
 
     // Query-specific analytics
     let materialInventoryResult, sitesWithMaterialsResult, topForecastsResult, supplyChainConnectionsResult;
 
-    if (queryType === 'materials-sites') {
-      // Analytics for "Materials & Sites" - Production Network Analysis
+    if (queryType === 'formulation-sites') {
+      // Analytics for "Formulation Sites" - Production Analysis
 
-      // Chart 1: Material Distribution Across Sites (Supply Diversification Risk)
+      // Chart 1: Top Materials by Site (Material Distribution)
       materialInventoryResult = await runQuery(`
-        MATCH (m:Material)-[:HAS_MATERIAL_LOCATION]->(ml:MaterialLocation)-[:LOCATED_AT]->(s:Site)
-        WITH m, count(DISTINCT s) as siteCount
-        RETURN m.name as material, siteCount as inventory
+        MATCH (form:Formulation)-[:HAS_MATERIAL]->(m:Material)
+        WITH m.material_name as material, count(DISTINCT form) as siteCount
+        RETURN material, siteCount as inventory
         ORDER BY siteCount DESC LIMIT 10
       `);
 
-      // Chart 2: Site Production Capacity vs Actual Production
+      // Chart 2: Formulation Sites Production Performance
       sitesWithMaterialsResult = await runQuery(`
-        MATCH (s:Site)-[:HAS_PRODUCTION_ACTUALS]->(p:ProductionActuals)
-        OPTIONAL MATCH (s)<-[:LOCATED_AT]-(ml:MaterialLocation)
-        WITH s, sum(p.quantity) as actualProduction, count(DISTINCT ml) as capacity
-        RETURN s.name as site,
-               actualProduction as production,
-               capacity as capacity
-        ORDER BY actualProduction DESC
+        MATCH (form:Formulation)-[:HAS_PRODUCTION_DATA]->(prod:ProductionDataPoints)
+        RETURN form.site_name as site,
+               prod.production_actual as production,
+               prod.production_budget as capacity
+        ORDER BY production DESC LIMIT 10
       `);
 
-      // Chart 3: Top Materials by Production Volume
+      // Chart 3: Top Materials by Usage Across Formulation Sites
       topForecastsResult = await runQuery(`
-        MATCH (m:Material)<-[:produces]-(p:ProductionActuals)
-        RETURN m.name as material, sum(p.quantity) as value
+        MATCH (form:Formulation)-[:HAS_MATERIAL]->(m:Material)
+        WITH m.material_name as material, count(form) as usageCount
+        RETURN material, usageCount as value
         ORDER BY value DESC LIMIT 8
       `);
 
-      // Chart 4: Site Utilization Insights (Multi-material sites)
+      // Chart 4: Site-Material Production Matrix
       supplyChainConnectionsResult = await runQuery(`
-        MATCH (s:Site)<-[:LOCATED_AT]-(ml:MaterialLocation)<-[:HAS_MATERIAL_LOCATION]-(m:Material)
-        WITH s, m, ml
-        MATCH (s)-[:HAS_PRODUCTION_ACTUALS]->(p:ProductionActuals)
-        RETURN s.name as site, m.name as material,
-               sum(p.quantity) as production,
+        MATCH (form:Formulation)-[:HAS_MATERIAL]->(m:Material)
+        OPTIONAL MATCH (form)-[:HAS_PRODUCTION_DATA]->(prod:ProductionDataPoints)
+        RETURN form.site_name as site,
+               m.material_name as material,
+               prod.production_actual as production,
                'Produces' as relationship
         ORDER BY production DESC
         LIMIT 15
       `);
     } else if (queryType === 'supply-chain') {
-      // Analytics for "Supply Chain Network" - End-to-End Flow Analysis
+      // Analytics for "Supply Chain Network" - End-to-End Flow from API to Markets
 
-      // Chart 1: Forecast vs Actual Sales by Market (Demand Planning Accuracy)
+      // Chart 1: Customer Market Sales Volume
       materialInventoryResult = await runQuery(`
-        MATCH (mk:Market)<-[:marketOfSale]-(f:Forecast)
-        OPTIONAL MATCH (mk)<-[:marketOfSale]-(s:ActualSales)
-        WITH mk,
-             sum(f.forecast_qty) as totalForecast,
-             sum(s.sales_qty) as totalSales
-        RETURN mk.name as market,
-               toInteger(coalesce(totalForecast, 0)) as forecast,
-               toInteger(coalesce(totalSales, 0)) as actual
-        ORDER BY forecast DESC LIMIT 10
+        MATCH (mk:Customer_Market)
+        RETURN mk.countryname as market,
+               mk.Sales as inventory
+        ORDER BY inventory DESC LIMIT 10
       `);
 
-      // Chart 2: Supplier Network Health (Materials per Supplier)
+      // Chart 2: Supply Chain Stages Distribution
       sitesWithMaterialsResult = await runQuery(`
-        MATCH (org:Organisation)-[:supplies]->(m:Material)
-        RETURN org.name as supplier,
-               count(DISTINCT m) as materialCount
+        MATCH (n)
+        WHERE n:RSM OR n:RM OR n:Intermediate OR n:API OR n:Formulation OR n:Packing OR n:Storage
+        WITH labels(n)[0] as stage, count(n) as siteCount
+        RETURN stage as site,
+               siteCount as materialCount
         ORDER BY materialCount DESC
       `);
 
-      // Chart 3: Market Forecast Accuracy (% Variance)
+      // Chart 3: Top API Sites by Downstream Connections
       topForecastsResult = await runQuery(`
-        MATCH (mk:Market)<-[:marketOfSale]-(f:Forecast)
-        MATCH (mk)<-[:marketOfSale]-(s:ActualSales)
-        WITH mk,
-             sum(f.forecast_qty) as totalForecast,
-             sum(s.sales_qty) as totalSales
-        WHERE totalForecast > 0
-        WITH mk, totalForecast, totalSales,
-             toInteger(abs((totalForecast - totalSales) * 100.0 / totalForecast)) as variance
-        RETURN mk.name as market, variance as value
-        ORDER BY variance DESC LIMIT 10
+        MATCH (api:API)-[:SUPPLIES_TO*1..2]->(downstream)
+        WITH api.site_name as material, count(DISTINCT downstream) as value
+        RETURN material, value
+        ORDER BY value DESC LIMIT 10
       `);
 
-      // Chart 4: Complete Supply Chain Flow
+      // Chart 4: Complete Supply Chain Flow (API → Formulation → Packing → Market)
       supplyChainConnectionsResult = await runQuery(`
-        MATCH (org:Organisation)-[:supplies]->(m:Material)-[:HAS_FORECAST]->(f:Forecast)-[:marketOfSale]->(mk:Market)
-        RETURN org.name as supplier,
-               m.name as material,
-               mk.name as market,
-               f.forecast_qty as demand,
-               'Supplier→Material→Market' as relationship
+        MATCH (api:API)-[:SUPPLIES_TO]->(form:Formulation)-[:SUPPLIES_TO]->(pack:Packing)-[:SUPPLIES_TO]->(market:Customer_Market)
+        RETURN api.site_name as supplier,
+               form.site_name as material,
+               market.countryname as market,
+               market.Sales as demand,
+               'API→Form→Pack→Market' as relationship
         ORDER BY demand DESC
         LIMIT 15
       `);
     } else if (queryType === 'materials-inventory') {
       // Analytics for "Materials with Inventory" - Stock Health & Optimization
 
-      // Chart 1: Top Materials by Inventory Levels
+      // Chart 1: Top Materials by Inventory Volume
       materialInventoryResult = await runQuery(`
-        MATCH (m:Material)<-[:HAS_MATERIAL]-(ia:InventoryActuals)
-        RETURN m.name as material, sum(ia.quantity) as inventory
+        MATCH (form:Formulation)-[:HAS_MATERIAL]->(m:Material)
+        OPTIONAL MATCH (m)-[:HAS_MATERIAL_LOCATION]->(ml:MaterialLocation)
+        WITH m.material_name as material, sum(ml.inventory_volume) as totalInventory
+        WHERE totalInventory > 0
+        RETURN material, totalInventory as inventory
         ORDER BY inventory DESC LIMIT 10
       `);
 
-      // Chart 2: Inventory vs Production Ratio by Material (Stock Efficiency)
+      // Chart 2: Inventory Value by Site
       sitesWithMaterialsResult = await runQuery(`
-        MATCH (m:Material)<-[:HAS_MATERIAL]-(ia:InventoryActuals)
-        OPTIONAL MATCH (m)<-[:produces]-(p:ProductionActuals)
-        WITH m, sum(ia.quantity) as totalInventory, sum(p.quantity) as totalProduction
-        WHERE totalProduction > 0
-        RETURN m.name as material,
-               toInteger(totalInventory) as inventory,
-               toInteger(totalProduction) as production
+        MATCH (site)-[:HAS_INVENTORY_DATA]->(inv:InventoryDataPoints)
+        WHERE site:Formulation OR site:API OR site:Packing
+        RETURN site.site_name as site,
+               inv.inventory_value_API as inventory,
+               inv.inventory_volume_API as production
         ORDER BY inventory DESC LIMIT 10
       `);
 
-      // Chart 3: Stockout Risk Analysis (Low Inventory Materials)
+      // Chart 3: Inventory Days Covered (Stock Risk Analysis)
       topForecastsResult = await runQuery(`
-        MATCH (m:Material)<-[:HAS_MATERIAL]-(ia:InventoryActuals)
-        OPTIONAL MATCH (m)-[:HAS_ACTUAL_SALES]->(s:ActualSales)
-        WITH m, sum(ia.quantity) as totalInventory, sum(s.sales_qty) as totalSales
-        WHERE totalSales > 0 AND totalInventory > 0
-        WITH m, totalInventory, totalSales,
-             toInteger((totalInventory * 100.0) / totalSales) as coverage
-        RETURN m.name as material, coverage as value
-        ORDER BY coverage ASC LIMIT 10
+        MATCH (site)-[:HAS_INVENTORY_DATA]->(inv:InventoryDataPoints)
+        WHERE site:Formulation OR site:API
+        WITH site.site_name as material, inv.inventory_days_covered_API as value
+        WHERE value > 0
+        RETURN material, toInteger(value) as value
+        ORDER BY value ASC LIMIT 10
       `);
 
-      // Chart 4: Site-Level Inventory Distribution
+      // Chart 4: Material Location Details
       supplyChainConnectionsResult = await runQuery(`
-        MATCH (s:Site)-[:HAS_INVENTORY_ACTUALS]->(ia:InventoryActuals)-[:HAS_MATERIAL]->(m:Material)
-        RETURN s.name as site,
-               m.name as material,
-               ia.quantity as quantity,
-               'Stock: ' + toString(ia.quantity) + ' units' as relationship
+        MATCH (form:Formulation)-[:HAS_MATERIAL]->(m:Material)-[:HAS_MATERIAL_LOCATION]->(ml:MaterialLocation)
+        WHERE ml.inventory_volume > 0
+        RETURN form.site_name as site,
+               m.material_name as material,
+               ml.prodloc_code as market,
+               ml.inventory_volume as quantity,
+               'Inventory: ' + toString(toInteger(ml.inventory_volume)) + ' units' as relationship
         ORDER BY quantity DESC
         LIMIT 15
       `);
     } else {
-      // Default: "All Data" - Comprehensive Supply Chain Overview
+      // Default: "All Data" - Comprehensive Forxiga Supply Chain Overview
 
-      // Chart 1: Material Performance Score (Inventory + Production + Sales)
+      // Chart 1: Production Volume by Site Type
       materialInventoryResult = await runQuery(`
-        MATCH (m:Material)
-        OPTIONAL MATCH (m)<-[:HAS_MATERIAL]-(ia:InventoryActuals)
-        OPTIONAL MATCH (m)<-[:produces]-(p:ProductionActuals)
-        OPTIONAL MATCH (m)-[:HAS_ACTUAL_SALES]->(s:ActualSales)
-        WITH m,
-             sum(ia.quantity) as inv,
-             sum(p.quantity) as prod,
-             sum(s.sales_qty) as sales
-        WHERE inv > 0 OR prod > 0 OR sales > 0
-        RETURN m.name as material,
-               toInteger(coalesce(inv, 0) + coalesce(prod, 0) + coalesce(sales, 0)) as inventory
-        ORDER BY inventory DESC LIMIT 10
+        MATCH (site)-[:HAS_PRODUCTION_DATA]->(prod:ProductionDataPoints)
+        WHERE site:Formulation OR site:API OR site:Packing
+        WITH labels(site)[0] as material, sum(prod.production_actual) as totalProduction
+        RETURN material, toInteger(totalProduction) as inventory
+        ORDER BY inventory DESC
       `);
 
-      // Chart 2: Site Production vs Inventory Capacity
+      // Chart 2: Top Sites by Production Volume
       sitesWithMaterialsResult = await runQuery(`
-        MATCH (s:Site)
-        OPTIONAL MATCH (s)-[:HAS_PRODUCTION_ACTUALS]->(p:ProductionActuals)
-        OPTIONAL MATCH (s)-[:HAS_INVENTORY_ACTUALS]->(ia:InventoryActuals)
-        WITH s,
-             sum(p.quantity) as production,
-             sum(ia.quantity) as inventory
-        WHERE production > 0 OR inventory > 0
-        RETURN s.name as site,
-               toInteger(coalesce(production, 0)) as production,
-               toInteger(coalesce(inventory, 0)) as inventory
-        ORDER BY production DESC
+        MATCH (site)-[:HAS_PRODUCTION_DATA]->(prod:ProductionDataPoints)
+        WHERE site:Formulation OR site:API OR site:Packing
+        OPTIONAL MATCH (site)-[:HAS_INVENTORY_DATA]->(inv:InventoryDataPoints)
+        RETURN site.site_name as site,
+               toInteger(prod.production_actual) as production,
+               toInteger(inv.inventory_volume_API) as inventory
+        ORDER BY production DESC LIMIT 10
       `);
 
-      // Chart 3: BOM Complexity Analysis (Materials with Most Components)
+      // Chart 3: Supply Chain Connectivity (Nodes with Most Connections)
       topForecastsResult = await runQuery(`
-        MATCH (m:Material)-[:HAS_BOM]->(b:BOM)-[:HAS_BOM_ITEM]->(comp:Material)
-        WITH m, count(DISTINCT comp) as componentCount
-        RETURN m.name as material, componentCount as value
-        ORDER BY componentCount DESC LIMIT 10
+        MATCH (n)-[:SUPPLIES_TO]-(connected)
+        WHERE n:API OR n:Formulation OR n:Packing
+        WITH n.id as material, count(DISTINCT connected) as value
+        RETURN material, value
+        ORDER BY value DESC LIMIT 10
       `);
 
-      // Chart 4: End-to-End Supply Chain Connections
+      // Chart 4: End-to-End Supply Chain Stages
       supplyChainConnectionsResult = await runQuery(`
-        MATCH (org:Organisation)-[:supplies]->(m:Material)
-        OPTIONAL MATCH (m)-[:HAS_BOM]->(b:BOM)-[:HAS_BOM_ITEM]->(comp:Material)
-        RETURN org.name as supplier,
-               m.name as material,
-               comp.name as component,
-               'Supplier→Material→Component' as relationship
+        MATCH path = (source)-[:SUPPLIES_TO*1..3]->(target)
+        WHERE source:API OR source:Intermediate
+        AND target:Customer_Market OR target:Packing
+        WITH source, target, length(path) as pathLength
+        RETURN source.site_name as supplier,
+               labels(target)[0] as material,
+               target.id as market,
+               pathLength as demand,
+               'Supply Path Length: ' + toString(pathLength) as relationship
+        ORDER BY pathLength DESC
         LIMIT 15
       `);
     }
@@ -252,9 +248,11 @@ export const fetchDashboardData = async (queryType = 'all') => {
       totalNodes: toNumber(totalNodesResult.records[0]?.get('count')) || 0,
       totalRelationships: toNumber(totalRelationshipsResult.records[0]?.get('count')) || 0,
       totalMaterials: toNumber(totalMaterialsResult.records[0]?.get('count')) || 0,
-      totalSites: toNumber(totalSitesResult.records[0]?.get('count')) || 0,
+      totalSites: toNumber(totalFormulationSitesResult.records[0]?.get('count')) || 0,
       totalMarkets: toNumber(totalMarketsResult.records[0]?.get('count')) || 0,
-      totalInventory: toNumber(totalInventoryResult.records[0]?.get('total')) || 0,
+      totalAPISites: toNumber(totalAPISitesResult.records[0]?.get('count')) || 0,
+      totalInventory: toNumber(totalInventoryVolumeResult.records[0]?.get('total')) || 0,
+      totalProduction: toNumber(totalProductionResult.records[0]?.get('total')) || 0,
 
       nodeTypes: nodeTypesResult.records.map(record => ({
         type: record.get('type'),

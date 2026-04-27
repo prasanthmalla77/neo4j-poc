@@ -1,37 +1,37 @@
-import React, { useState, useEffect } from 'react';
-import { getAlgorithmConfig, populateDynamicOptions, validateAlgorithmConfig, getDefaultConfig } from '../data/algorithmConfigs';
+import React, { useState, useMemo } from 'react';
+import { populateDynamicOptions, validateAlgorithmConfig, getDefaultConfig } from '../data/algorithmConfigs';
 import './AlgorithmPanel.css';
 
 const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting }) => {
   const [selectedAlgorithm, setSelectedAlgorithm] = useState('');
   const [config, setConfig] = useState({});
-  const [algorithmConfig, setAlgorithmConfig] = useState(null);
   const [validationErrors, setValidationErrors] = useState([]);
 
-  // Update algorithm config when selection changes
-  useEffect(() => {
-    if (selectedAlgorithm) {
-      const baseConfig = getAlgorithmConfig(selectedAlgorithm);
-      const configWithOptions = populateDynamicOptions(selectedAlgorithm, graphData);
-      setAlgorithmConfig(configWithOptions);
-      setConfig(getDefaultConfig(selectedAlgorithm));
-      setValidationErrors([]);
-    } else {
-      setAlgorithmConfig(null);
-      setConfig({});
-    }
-  }, [selectedAlgorithm, graphData]);
+  // Derive the algorithm schema + dynamic options synchronously.
+  // Full `config` is in deps so ANY config change (label, mode, etc.) refreshes options.
+  const algorithmConfig = useMemo(() => {
+    if (!selectedAlgorithm || !graphData?.nodes) return null;
+    return populateDynamicOptions(selectedAlgorithm, graphData, config);
+  }, [selectedAlgorithm, graphData, config]);
 
   const handleAlgorithmChange = (e) => {
-    setSelectedAlgorithm(e.target.value);
+    const algo = e.target.value;
+    setSelectedAlgorithm(algo);
+    // Config reset only here — the ONLY place it should ever reset
+    setConfig(algo ? getDefaultConfig(algo) : {});
+    setValidationErrors([]);
   };
 
   const handleConfigChange = (paramKey, value) => {
-    setConfig(prev => ({
-      ...prev,
-      [paramKey]: value
-    }));
-    // Clear validation errors when user makes changes
+    if (paramKey === 'targetNodeLabel') {
+      // Clear previously selected properties when label changes
+      setConfig(prev => ({ ...prev, [paramKey]: value, targetProperties: [] }));
+    } else if (paramKey === 'relationshipFilter') {
+      // Clear weight property when relationship filter changes — options will repopulate
+      setConfig(prev => ({ ...prev, [paramKey]: value, weightProperty: '' }));
+    } else {
+      setConfig(prev => ({ ...prev, [paramKey]: value }));
+    }
     setValidationErrors([]);
   };
 
@@ -66,6 +66,9 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
             <label className="algo-label">
               {param.label}
               {param.required && <span className="required">*</span>}
+              {param.helpText && (
+                <span className="info-icon" title={param.helpText}>ℹ️</span>
+              )}
             </label>
             <select
               className="algo-select"
@@ -75,12 +78,17 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
             >
               <option value="">Select {param.label}</option>
               {param.options.map(opt => (
-                <option key={opt.value} value={opt.value}>
+                <option key={opt.value} value={opt.value} title={opt.description || ''}>
                   {opt.label}
                 </option>
               ))}
             </select>
             {param.helpText && <small className="algo-help-text">{param.helpText}</small>}
+            {value && param.options.find(opt => opt.value === value)?.description && (
+              <div className="option-description">
+                💡 {param.options.find(opt => opt.value === value).description}
+              </div>
+            )}
           </div>
         );
 
@@ -90,6 +98,9 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
             <label className="algo-label">
               {param.label}
               {param.required && <span className="required">*</span>}
+              {param.helpText && (
+                <span className="info-icon" title={param.helpText}>ℹ️</span>
+              )}
             </label>
             <input
               type="number"
@@ -100,8 +111,14 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
               step={param.step || 1}
               onChange={(e) => handleConfigChange(paramKey, parseFloat(e.target.value))}
               disabled={isExecuting}
+              placeholder={param.placeholder || `Enter ${param.label.toLowerCase()}`}
             />
             {param.helpText && <small className="algo-help-text">{param.helpText}</small>}
+            {(param.min !== undefined || param.max !== undefined) && (
+              <small className="algo-range-text">
+                Range: {param.min ?? 'no min'} - {param.max ?? 'no max'}
+              </small>
+            )}
           </div>
         );
 
@@ -111,6 +128,9 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
             <label className="algo-label">
               {param.label}
               {param.required && <span className="required">*</span>}
+              {param.helpText && (
+                <span className="info-icon" title={param.helpText}>ℹ️</span>
+              )}
             </label>
             <input
               type="text"
@@ -125,31 +145,54 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
         );
 
       case 'multiselect':
+        // For targetProperties: always compute options live from graphData filtered by the
+        // currently selected label so the checklist immediately reflects the label change.
+        if (paramKey === 'targetProperties' && graphData?.nodes) {
+          const selectedLabel = config.targetNodeLabel || '';
+          const labelPropMap = {};
+          graphData.nodes.forEach(n => {
+            (n.labels || []).forEach(lbl => {
+              if (!labelPropMap[lbl]) labelPropMap[lbl] = new Set();
+              Object.keys(n.properties || {}).forEach(k => labelPropMap[lbl].add(k));
+            });
+          });
+          const propKeys = selectedLabel && labelPropMap[selectedLabel]
+            ? [...labelPropMap[selectedLabel]].sort()
+            : [...new Set(graphData.nodes.flatMap(n => Object.keys(n.properties || {})))].sort();
+          param = { ...param, options: propKeys.map(k => ({ value: k, label: k })) };
+        }
         return (
           <div key={paramKey} className="algo-form-group">
             <label className="algo-label">
               {param.label}
               {param.required && <span className="required">*</span>}
+              {param.helpText && (
+                <span className="info-icon" title={param.helpText}>ℹ️</span>
+              )}
             </label>
-            <div className="algo-multiselect">
-              {param.options.map(opt => (
-                <label key={opt.value} className="algo-checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={(value || []).includes(opt.value)}
-                    onChange={(e) => {
-                      const newValue = e.target.checked
-                        ? [...(value || []), opt.value]
-                        : (value || []).filter(v => v !== opt.value);
-                      handleConfigChange(paramKey, newValue);
-                    }}
-                    disabled={isExecuting}
-                  />
-                  <span>{opt.label}</span>
-                </label>
-              ))}
-            </div>
             {param.helpText && <small className="algo-help-text">{param.helpText}</small>}
+            <div className="algo-multiselect">
+              {param.options.length === 0 ? (
+                <small className="algo-empty-text">No options available</small>
+              ) : (
+                param.options.map(opt => (
+                  <label key={opt.value} className="algo-checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={(value || []).includes(opt.value)}
+                      onChange={(e) => {
+                        const newValue = e.target.checked
+                          ? [...(value || []), opt.value]
+                          : (value || []).filter(v => v !== opt.value);
+                        handleConfigChange(paramKey, newValue);
+                      }}
+                      disabled={isExecuting}
+                    />
+                    <span>{opt.label}</span>
+                  </label>
+                ))
+              )}
+            </div>
           </div>
         );
 
@@ -159,6 +202,9 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
             <label className="algo-label">
               {param.label}
               {param.required && <span className="required">*</span>}
+              {param.helpText && (
+                <span className="info-icon" title={param.helpText}>ℹ️</span>
+              )}
             </label>
             <select
               className="algo-select"
@@ -167,11 +213,19 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
               disabled={isExecuting}
             >
               <option value="">Select {param.label}</option>
-              {graphData.nodes.map(node => (
-                <option key={node.id} value={node.id}>
-                  {node.properties?.name || node.id} ({node.labels.join(', ')})
-                </option>
-              ))}
+              {graphData.nodes.map(node => {
+                const props = node.properties || {};
+                const nodeLabel = node.labels?.[0] || '';
+                const labelsTag = props.labels || props.LABELS || '';
+                const caption = labelsTag
+                  ? `${nodeLabel}_${labelsTag}`
+                  : props.site_name || props.vendor_name || props.name || props.id || nodeLabel;
+                return (
+                  <option key={node.id} value={node.id}>
+                    {caption}
+                  </option>
+                );
+              })}
             </select>
             {param.helpText && <small className="algo-help-text">{param.helpText}</small>}
           </div>
@@ -194,6 +248,7 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
           <label className="algo-label">
             Select Algorithm
             <span className="required">*</span>
+            <span className="info-icon" title="Choose a graph algorithm to analyze your network">ℹ️</span>
           </label>
           <select
             className="algo-select"
@@ -203,11 +258,12 @@ const AlgorithmPanel = ({ availableAlgorithms, graphData, onExecute, isExecuting
           >
             <option value="">Choose an algorithm...</option>
             {availableAlgorithms.map(algo => (
-              <option key={algo.id} value={algo.id}>
+              <option key={algo.id} value={algo.id} title={algo.description || ''}>
                 {algo.name}
               </option>
             ))}
           </select>
+          <small className="algo-help-text">Select a graph algorithm to run on your data</small>
         </div>
 
         {/* Algorithm Description */}
