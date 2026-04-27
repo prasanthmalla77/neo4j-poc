@@ -1,30 +1,14 @@
-import neo4j from 'neo4j-driver';
+import { initDriver } from './neo4jService';
 
-const NEO4J_CONFIG = {
-  uri: process.env.REACT_APP_AZ_NEO4J_URI || process.env.REACT_APP_NEO4J_URI || 'bolt://localhost:7687',
-  username: process.env.REACT_APP_AZ_NEO4J_USERNAME || process.env.REACT_APP_NEO4J_USERNAME || 'neo4j',
-  password: process.env.REACT_APP_AZ_NEO4J_PASSWORD || process.env.REACT_APP_NEO4J_PASSWORD || '',
-  database: process.env.REACT_APP_AZ_NEO4J_DATABASE || process.env.REACT_APP_NEO4J_DATABASE || 'neo4j',
-  authority: process.env.REACT_APP_AZ_NEO4J_AUTHORITY || null
-};
-
-let driver = null;
-
-// Initialize Neo4j driver
-const getDriver = () => {
-  if (!driver) {
-    driver = neo4j.driver(
-      NEO4J_CONFIG.uri,
-      neo4j.auth.basic(NEO4J_CONFIG.username, NEO4J_CONFIG.password)
-    );
-  }
-  return driver;
-};
+const USE_AZ_CLOUD = process.env.REACT_APP_AZ_CLOUD === 'true';
+const NEO4J_DATABASE = USE_AZ_CLOUD
+  ? (process.env.REACT_APP_AZ_NEO4J_DATABASE || 'neo4j')
+  : (process.env.REACT_APP_NEO4J_DATABASE || 'neo4j');
 
 // Helper function to run a query with its own session
 const runQuery = async (query) => {
-  const driver = getDriver();
-  const session = driver.session({ database: NEO4J_CONFIG.database });
+  const driver = await initDriver();
+  const session = driver.session({ database: NEO4J_DATABASE });
   try {
     const result = await session.run(query);
     return result;
@@ -35,8 +19,6 @@ const runQuery = async (query) => {
 
 // Fetch all dashboard data
 export const fetchDashboardData = async (queryType = 'all') => {
-  const driver = getDriver();
-
   try {
     // Base queries (always run)
     const totalNodesResult = await runQuery('MATCH (n) RETURN count(n) as count');

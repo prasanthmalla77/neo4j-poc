@@ -3,9 +3,10 @@
 // Aligned with Dashboard Service query types
 import { initDriver } from './neo4jService';
 
-const NEO4J_DATABASE = process.env.REACT_APP_AZ_NEO4J_DATABASE
-  || process.env.REACT_APP_NEO4J_DATABASE
-  || 'neo4j';
+const USE_AZ_CLOUD = process.env.REACT_APP_AZ_CLOUD === 'true';
+const NEO4J_DATABASE = USE_AZ_CLOUD
+  ? (process.env.REACT_APP_AZ_NEO4J_DATABASE || 'neo4j')
+  : (process.env.REACT_APP_NEO4J_DATABASE || 'neo4j');
 
 const HARDCODED_QUERIES = {
   // Complete Supply Chain View
