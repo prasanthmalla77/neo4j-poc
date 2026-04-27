@@ -26,9 +26,8 @@ const NEO4J_CONFIG = {
 let _azTokenCache = null; // { accessToken, expiresAt }
 
 /**
- * Acquire an Azure AD bearer token via the ROPC (username/password) grant.
- * Uses an in-memory cache and refreshes when within 5 minutes of expiry.
- * Works in browser (fetch) and Node.js alike — no MSAL package required.
+ * Acquire an Azure AD bearer token via the Node.js proxy (setupProxy.js).
+ * The proxy uses @azure/msal-node (ROPC) so there are no browser CORS issues.
  */
 async function getAzureToken() {
   const now = Date.now();
@@ -37,38 +36,15 @@ async function getAzureToken() {
     return _azTokenCache.accessToken;
   }
 
-  const clientId = process.env.REACT_APP_AZ_CLIENT_ID;
-  const username = process.env.REACT_APP_AZ_NEO4J_USERNAME;
-  const password = process.env.REACT_APP_AZ_NEO4J_PASSWORD;
-  const scope    = `api://${clientId}/access-token`;
-
-  // Use the CRA dev-server proxy (/api/az-token) so the request goes through
-  // Node instead of the browser, avoiding the Azure AD CORS restriction.
-  const body = new URLSearchParams({
-    grant_type: 'password',
-    client_id:  clientId,
-    username,
-    password,
-    scope,
-  });
-
-  const response = await fetch('/api/az-token', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    body.toString(),
-  });
-
+  const response = await fetch('/api/az-token', { method: 'POST' });
   const data = await response.json();
 
   if (!data.access_token) {
-    const msg = data.error_description || data.error || 'Unknown Azure AD error';
-    throw new Error(`[Neo4j Service] Azure token acquisition failed: ${msg}`);
+    throw new Error(`[Neo4j Service] Azure token acquisition failed: ${data.error}`);
   }
 
-  // expires_in is in seconds; default to 1 hour if absent
-  const expiresIn = (data.expires_in || 3600) * 1000;
-  _azTokenCache = { accessToken: data.access_token, expiresAt: now + expiresIn };
-  console.log('[Neo4j Service] Azure token acquired via ROPC');
+  _azTokenCache = { accessToken: data.access_token, expiresAt: now + 3600000 };
+  console.log('[Neo4j Service] Azure token acquired');
   return data.access_token;
 }
 
