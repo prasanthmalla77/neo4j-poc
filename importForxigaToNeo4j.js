@@ -1,7 +1,7 @@
 const neo4j = require('neo4j-driver');
 const fs = require('fs');
-const https = require('https');
 const path = require('path');
+const { PublicClientApplication } = require('@azure/msal-node');
 
 // ── Load .env.local (if present) ─────────────────────────────────────────────
 function loadEnvLocal() {
@@ -41,55 +41,35 @@ const NEO4J_CONFIG = {
 // Brand configuration
 const BRAND = 'forxiga';
 
-// ── Azure AD ROPC token helper ────────────────────────────────────────────────
+// ── Azure AD token helper (@azure/msal-node) ─────────────────────────────────
 async function getAzureToken() {
     const authority = process.env.REACT_APP_AZ_NEO4J_AUTHORITY;
     const clientId  = process.env.REACT_APP_AZ_CLIENT_ID;
     const username  = process.env.REACT_APP_AZ_NEO4J_USERNAME;
     const password  = process.env.REACT_APP_AZ_NEO4J_PASSWORD;
-    const scope     = `api://${clientId}/access-token`;
+    const scopes    = [`api://${clientId}/access-token`];
 
-    const body = new URLSearchParams({
-        grant_type: 'password',
-        client_id:  clientId,
-        username,
-        password,
-        scope,
-    }).toString();
-
-    const url = new URL(`${authority}/oauth2/v2.0/token`);
-
-    return new Promise((resolve, reject) => {
-        const req = https.request(
-            {
-                hostname: url.hostname,
-                path:     url.pathname + url.search,
-                method:   'POST',
-                headers:  {
-                    'Content-Type':   'application/x-www-form-urlencoded',
-                    'Content-Length': Buffer.byteLength(body),
-                },
-            },
-            (res) => {
-                let raw = '';
-                res.on('data', chunk => { raw += chunk; });
-                res.on('end', () => {
-                    try {
-                        const data = JSON.parse(raw);
-                        if (!data.access_token) {
-                            reject(new Error(`Azure token error: ${data.error_description || data.error}`));
-                        } else {
-                            console.log('[Import] Azure token acquired via ROPC');
-                            resolve(data.access_token);
-                        }
-                    } catch (e) { reject(e); }
-                });
-            }
-        );
-        req.on('error', reject);
-        req.write(body);
-        req.end();
+    const pca = new PublicClientApplication({
+        auth: { clientId, authority },
     });
+
+    // Try silent first (uses cached accounts from previous calls)
+    const accounts = await pca.getTokenCache().getAllAccounts();
+    if (accounts.length > 0) {
+        try {
+            const silent = await pca.acquireTokenSilent({ scopes, account: accounts[0] });
+            if (silent?.accessToken) {
+                console.log('[Import] Token acquired silently');
+                return silent.accessToken;
+            }
+        } catch (_) {}
+    }
+
+    // Fallback to username/password (ROPC)
+    const result = await pca.acquireTokenByUsernamePassword({ scopes, username, password });
+    if (!result?.accessToken) throw new Error('Failed to acquire Azure token');
+    console.log('[Import] Token acquired via username/password');
+    return result.accessToken;
 }
 
 // ── Driver factory (async to support bearer auth) ────────────────────────────
