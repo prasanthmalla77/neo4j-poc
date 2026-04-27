@@ -1,26 +1,117 @@
 const neo4j = require('neo4j-driver');
 const fs = require('fs');
+const https = require('https');
+const path = require('path');
+
+// ── Load .env.local (if present) ─────────────────────────────────────────────
+function loadEnvLocal() {
+    const envPath = path.resolve(__dirname, '.env.local');
+    if (!fs.existsSync(envPath)) return;
+    const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx === -1) continue;
+        const key = trimmed.slice(0, eqIdx).trim();
+        const val = trimmed.slice(eqIdx + 1).trim();
+        if (!(key in process.env)) process.env[key] = val;
+    }
+}
+loadEnvLocal();
+
+// ── Feature flag ─────────────────────────────────────────────────────────────
+const USE_AZ_CLOUD = process.env.REACT_APP_AZ_CLOUD === 'true';
 
 const NEO4J_CONFIG = {
-    uri: 'bolt://localhost:7687',
-    username: 'neo4j',
-    password: '14071407',
-    database: 'test'
+    uri: (USE_AZ_CLOUD ? process.env.REACT_APP_AZ_NEO4J_URI : null)
+        || process.env.REACT_APP_NEO4J_URI
+        || 'bolt://localhost:7687',
+    username: (USE_AZ_CLOUD ? process.env.REACT_APP_AZ_NEO4J_USERNAME : null)
+        || process.env.REACT_APP_NEO4J_USERNAME
+        || 'neo4j',
+    password: (USE_AZ_CLOUD ? process.env.REACT_APP_AZ_NEO4J_PASSWORD : null)
+        || process.env.REACT_APP_NEO4J_PASSWORD
+        || '',
+    database: (USE_AZ_CLOUD ? process.env.REACT_APP_AZ_NEO4J_DATABASE : null)
+        || process.env.REACT_APP_NEO4J_DATABASE
+        || 'test',
 };
 
 // Brand configuration
 const BRAND = 'tagrisso';
 
-const driver = neo4j.driver(
-    NEO4J_CONFIG.uri,
-    neo4j.auth.basic(NEO4J_CONFIG.username, NEO4J_CONFIG.password),
-    {
-        encrypted: false,
-        trust: 'TRUST_ALL_CERTIFICATES'
-    }
-);
+// ── Azure AD ROPC token helper ────────────────────────────────────────────────
+async function getAzureToken() {
+    const authority = process.env.REACT_APP_AZ_NEO4J_AUTHORITY;
+    const clientId  = process.env.REACT_APP_AZ_CLIENT_ID;
+    const username  = process.env.REACT_APP_AZ_NEO4J_USERNAME;
+    const password  = process.env.REACT_APP_AZ_NEO4J_PASSWORD;
+    const scope     = `api://${clientId}/access-token`;
 
-async function ensureDatabaseExists() {
+    const body = new URLSearchParams({
+        grant_type: 'password',
+        client_id:  clientId,
+        username,
+        password,
+        scope,
+    }).toString();
+
+    const url = new URL(`${authority}/oauth2/v2.0/token`);
+
+    return new Promise((resolve, reject) => {
+        const req = https.request(
+            {
+                hostname: url.hostname,
+                path:     url.pathname + url.search,
+                method:   'POST',
+                headers:  {
+                    'Content-Type':   'application/x-www-form-urlencoded',
+                    'Content-Length': Buffer.byteLength(body),
+                },
+            },
+            (res) => {
+                let raw = '';
+                res.on('data', chunk => { raw += chunk; });
+                res.on('end', () => {
+                    try {
+                        const data = JSON.parse(raw);
+                        if (!data.access_token) {
+                            reject(new Error(`Azure token error: ${data.error_description || data.error}`));
+                        } else {
+                            console.log('[Import] Azure token acquired via ROPC');
+                            resolve(data.access_token);
+                        }
+                    } catch (e) { reject(e); }
+                });
+            }
+        );
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+    });
+}
+
+// ── Driver factory (async to support bearer auth) ────────────────────────────
+async function createDriver() {
+    if (USE_AZ_CLOUD) {
+        const token = await getAzureToken();
+        console.log('[Import] Using Azure AD bearer auth');
+        return neo4j.driver(
+            NEO4J_CONFIG.uri,
+            neo4j.auth.bearer(token),
+            { maxConnectionLifetime: 60 * 8 * 1000, livenessCheckTimeout: 60 * 2 * 1000 }
+        );
+    }
+    console.log('[Import] Using basic auth');
+    return neo4j.driver(
+        NEO4J_CONFIG.uri,
+        neo4j.auth.basic(NEO4J_CONFIG.username, NEO4J_CONFIG.password),
+        { encrypted: false, trust: 'TRUST_ALL_CERTIFICATES' }
+    );
+}
+
+async function ensureDatabaseExists(driver) {
     const systemSession = driver.session({ database: 'system' });
 
     try {
@@ -419,9 +510,11 @@ async function createNodeConnections(session, sourceNodeId, connections, validId
 }
 
 async function importData() {
+    const driver = await createDriver();
+
     try {
-        // Ensure database exists
-        await ensureDatabaseExists();
+        // Ensure database exists (skip for AZ cloud — no system DB access)
+        if (!USE_AZ_CLOUD) await ensureDatabaseExists(driver);
 
         const session = driver.session({ database: NEO4J_CONFIG.database });
 

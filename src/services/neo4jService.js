@@ -3,30 +3,102 @@
 
 import neo4j from 'neo4j-driver';
 
-// Neo4j connection configuration — AZ keys take priority over local fallbacks
+// ── Feature flag ─────────────────────────────────────────────────────────────
+const USE_AZ_CLOUD = process.env.REACT_APP_AZ_CLOUD === 'true';
+
+// Neo4j connection configuration — AZ keys take priority when AZ_CLOUD is on
 const NEO4J_CONFIG = {
-  uri: process.env.REACT_APP_AZ_NEO4J_URI || process.env.REACT_APP_NEO4J_URI || 'bolt://localhost:7687',
-  username: process.env.REACT_APP_AZ_NEO4J_USERNAME || process.env.REACT_APP_NEO4J_USERNAME || 'neo4j',
-  password: process.env.REACT_APP_AZ_NEO4J_PASSWORD || process.env.REACT_APP_NEO4J_PASSWORD || '',
-  database: process.env.REACT_APP_AZ_NEO4J_DATABASE || process.env.REACT_APP_NEO4J_DATABASE || 'neo4j',
-  authority: process.env.REACT_APP_AZ_NEO4J_AUTHORITY || null
+  uri: (USE_AZ_CLOUD ? process.env.REACT_APP_AZ_NEO4J_URI : null)
+    || process.env.REACT_APP_NEO4J_URI
+    || 'bolt://localhost:7687',
+  username: (USE_AZ_CLOUD ? process.env.REACT_APP_AZ_NEO4J_USERNAME : null)
+    || process.env.REACT_APP_NEO4J_USERNAME
+    || 'neo4j',
+  password: (USE_AZ_CLOUD ? process.env.REACT_APP_AZ_NEO4J_PASSWORD : null)
+    || process.env.REACT_APP_NEO4J_PASSWORD
+    || '',
+  database: (USE_AZ_CLOUD ? process.env.REACT_APP_AZ_NEO4J_DATABASE : null)
+    || process.env.REACT_APP_NEO4J_DATABASE
+    || 'neo4j',
 };
+
+// ── Azure AD ROPC token cache ─────────────────────────────────────────────────
+let _azTokenCache = null; // { accessToken, expiresAt }
+
+/**
+ * Acquire an Azure AD bearer token via the ROPC (username/password) grant.
+ * Uses an in-memory cache and refreshes when within 5 minutes of expiry.
+ * Works in browser (fetch) and Node.js alike — no MSAL package required.
+ */
+async function getAzureToken() {
+  const now = Date.now();
+  if (_azTokenCache && _azTokenCache.expiresAt - now > 5 * 60 * 1000) {
+    console.log('[Neo4j Service] Using cached Azure token');
+    return _azTokenCache.accessToken;
+  }
+
+  const authority   = process.env.REACT_APP_AZ_NEO4J_AUTHORITY;
+  const clientId    = process.env.REACT_APP_AZ_CLIENT_ID;
+  const username    = process.env.REACT_APP_AZ_NEO4J_USERNAME;
+  const password    = process.env.REACT_APP_AZ_NEO4J_PASSWORD;
+  const scope       = `api://${clientId}/access-token`;
+  const tokenUrl    = `${authority}/oauth2/v2.0/token`;
+
+  const body = new URLSearchParams({
+    grant_type: 'password',
+    client_id:  clientId,
+    username,
+    password,
+    scope,
+  });
+
+  const response = await fetch(tokenUrl, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body:    body.toString(),
+  });
+
+  const data = await response.json();
+
+  if (!data.access_token) {
+    const msg = data.error_description || data.error || 'Unknown Azure AD error';
+    throw new Error(`[Neo4j Service] Azure token acquisition failed: ${msg}`);
+  }
+
+  // expires_in is in seconds; default to 1 hour if absent
+  const expiresIn = (data.expires_in || 3600) * 1000;
+  _azTokenCache = { accessToken: data.access_token, expiresAt: now + expiresIn };
+  console.log('[Neo4j Service] Azure token acquired via ROPC');
+  return data.access_token;
+}
 
 let driver = null;
 
 /**
- * Initialize Neo4j driver
- * @param {Object} config - Optional custom configuration
- * @returns {Object} Neo4j driver instance
+ * Initialize Neo4j driver.
+ * When REACT_APP_AZ_CLOUD=true, acquires an Azure AD bearer token first
+ * and uses neo4j.auth.bearer(); otherwise falls back to basic auth.
  */
-export const initDriver = (config = NEO4J_CONFIG) => {
+export const initDriver = async (config = NEO4J_CONFIG) => {
   if (!driver) {
+    let auth;
+    if (USE_AZ_CLOUD) {
+      const token = await getAzureToken();
+      auth = neo4j.auth.bearer(token);
+      console.log('[Neo4j Service] Using Azure AD bearer auth');
+    } else {
+      auth = neo4j.auth.basic(config.username, config.password);
+      console.log('[Neo4j Service] Using basic auth');
+    }
+
     driver = neo4j.driver(
       config.uri,
-      neo4j.auth.basic(config.username, config.password),
+      auth,
       {
-        maxConnectionPoolSize: 50,
-        connectionAcquisitionTimeout: 2 * 60 * 1000 // 2 minutes
+        maxConnectionLifetime:    60 * 8 * 1000,  // 8 minutes
+        livenessCheckTimeout:     60 * 2 * 1000,  // 2 minutes
+        maxConnectionPoolSize:    50,
+        connectionAcquisitionTimeout: 2 * 60 * 1000,
       }
     );
     console.log('[Neo4j Service] Driver initialized');
@@ -40,7 +112,7 @@ export const initDriver = (config = NEO4J_CONFIG) => {
  */
 export const testConnection = async () => {
   try {
-    const driver = initDriver();
+    const driver = await initDriver();
     const session = driver.session();
 
     await session.run('RETURN 1 as test');
@@ -63,7 +135,7 @@ export const testConnection = async () => {
  * @returns {Promise<Object>} Filtered job data
  */
 export const fetchFilteredGraphData = async (jobId = 'neo4j_job_001', nodeLabels = [], relationshipTypes = [], brands = []) => {
-  const driver = initDriver();
+  const driver = await initDriver();
   const session = driver.session({ database: NEO4J_CONFIG.database });
 
   const hasNodes = nodeLabels.length > 0;
@@ -248,7 +320,7 @@ export const fetchFilteredGraphData = async (jobId = 'neo4j_job_001', nodeLabels
  * @returns {Promise<Object>} Job data with nodes and relationships
  */
 export const fetchGraphData = async (jobId = 'neo4j_job_001') => {
-  const driver = initDriver();
+  const driver = await initDriver();
   const session = driver.session({ database: NEO4J_CONFIG.database });
 
   try {
@@ -339,7 +411,7 @@ export const fetchGraphData = async (jobId = 'neo4j_job_001') => {
  * @returns {Promise<Array>} Query results
  */
 export const executeQuery = async (query, params = {}) => {
-  const driver = initDriver();
+  const driver = await initDriver();
   const session = driver.session({ database: NEO4J_CONFIG.database });
 
   try {
@@ -362,7 +434,7 @@ export const executeQuery = async (query, params = {}) => {
  * @returns {Promise<Object>} Projection info
  */
 export const createGdsProjection = async (projectionName, nodeQuery = '*', relationshipQuery = '*') => {
-  const driver = initDriver();
+  const driver = await initDriver();
   const session = driver.session({ database: NEO4J_CONFIG.database });
 
   try {
@@ -412,7 +484,7 @@ export const createGdsProjection = async (projectionName, nodeQuery = '*', relat
  * @returns {Promise<Array>} Similarity results
  */
 export const runNodeSimilarityGds = async (projectionName, config) => {
-  const driver = initDriver();
+  const driver = await initDriver();
   const session = driver.session({ database: NEO4J_CONFIG.database });
 
   try {
@@ -459,7 +531,7 @@ export const runNodeSimilarityGds = async (projectionName, config) => {
  * @returns {Promise<Object>} Path results
  */
 export const runShortestPathGds = async (projectionName, config) => {
-  const driver = initDriver();
+  const driver = await initDriver();
   const session = driver.session({ database: NEO4J_CONFIG.database });
 
   try {
@@ -533,7 +605,7 @@ export const runShortestPathGds = async (projectionName, config) => {
  * @returns {Promise<Boolean>} Success status
  */
 export const dropGdsProjection = async (projectionName) => {
-  const driver = initDriver();
+  const driver = await initDriver();
   const session = driver.session({ database: NEO4J_CONFIG.database });
 
   try {
