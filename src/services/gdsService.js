@@ -75,7 +75,7 @@ export const createGdsProjection = async (jobId, nodes, relationships) => {
   };
   const relProjection = buildRelProjection(relTypes, relationships);
 
-  const driver = initDriver();
+  const driver = await initDriver();
   const session = driver.session({ database: NEO4J_DATABASE });
   try {
     // Drop stale projection if present (failIfMissing = false)
@@ -376,7 +376,7 @@ export const runShortestPath = async (projectionName, config) => {
   const directedRelProjection = buildDirectedRelProjection(relTypes, relationships);
   const nodeLabels = [...new Set(nodes.flatMap(n => n.labels || []))].filter(Boolean);
 
-  const driver = initDriver();
+  const driver = await initDriver();
   const setupSession = driver.session({ database: NEO4J_DATABASE });
   try {
     await setupSession.run('CALL gds.graph.drop($name, false) YIELD graphName', { name: directedProjName });
@@ -598,7 +598,7 @@ export const runBetweenness = async (projectionName, config) => {
   let scoreMap;
   let usedGds = false;
 
-  const driver = initDriver();
+  const driver = await initDriver();
   const session = driver.session({ database: NEO4J_DATABASE });
   try {
     const samplingSize = Math.max(10, Math.round(nodes.length * Number(samplingRatio)));
@@ -687,7 +687,7 @@ export const dropGdsProjection = async (projectionName) => {
     throw new Error(`Projection ${projectionName} not found`);
   }
 
-  const driver = initDriver();
+  const driver = await initDriver();
   const session = driver.session({ database: NEO4J_DATABASE });
   try {
     await session.run('CALL gds.graph.drop($name, false) YIELD graphName', { name: projectionName });
