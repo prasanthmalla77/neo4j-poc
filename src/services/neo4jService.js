@@ -37,13 +37,13 @@ async function getAzureToken() {
     return _azTokenCache.accessToken;
   }
 
-  const authority   = process.env.REACT_APP_AZ_NEO4J_AUTHORITY;
-  const clientId    = process.env.REACT_APP_AZ_CLIENT_ID;
-  const username    = process.env.REACT_APP_AZ_NEO4J_USERNAME;
-  const password    = process.env.REACT_APP_AZ_NEO4J_PASSWORD;
-  const scope       = `api://${clientId}/access-token`;
-  const tokenUrl    = `${authority}/oauth2/v2.0/token`;
+  const clientId = process.env.REACT_APP_AZ_CLIENT_ID;
+  const username = process.env.REACT_APP_AZ_NEO4J_USERNAME;
+  const password = process.env.REACT_APP_AZ_NEO4J_PASSWORD;
+  const scope    = `api://${clientId}/access-token`;
 
+  // Use the CRA dev-server proxy (/api/az-token) so the request goes through
+  // Node instead of the browser, avoiding the Azure AD CORS restriction.
   const body = new URLSearchParams({
     grant_type: 'password',
     client_id:  clientId,
@@ -52,7 +52,7 @@ async function getAzureToken() {
     scope,
   });
 
-  const response = await fetch(tokenUrl, {
+  const response = await fetch('/api/az-token', {
     method:  'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body:    body.toString(),
