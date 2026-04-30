@@ -1,6 +1,13 @@
 
 // Hardcoded query mapping for POC - Forxiga Supply Chain
 // Aligned with Dashboard Service query types
+import { initDriver } from './neo4jService';
+
+const USE_AZ_CLOUD = process.env.REACT_APP_AZ_CLOUD === 'true';
+const NEO4J_DATABASE = USE_AZ_CLOUD
+  ? (process.env.REACT_APP_AZ_NEO4J_DATABASE || 'neo4j')
+  : (process.env.REACT_APP_NEO4J_DATABASE || 'neo4j');
+
 const HARDCODED_QUERIES = {
   // Complete Supply Chain View
   'show the forxiga supply chain': {
@@ -1213,22 +1220,8 @@ export const processChatQuery = async (userQuestion) => {
 
 // Execute custom Cypher query
 const executeCustomQuery = async (cypherQuery) => {
-  const neo4j = require('neo4j-driver');
-
-  const config = {
-    uri: process.env.REACT_APP_AZ_NEO4J_URI || process.env.REACT_APP_NEO4J_URI || 'bolt://localhost:7687',
-    username: process.env.REACT_APP_AZ_NEO4J_USERNAME || process.env.REACT_APP_NEO4J_USERNAME || 'neo4j',
-    password: process.env.REACT_APP_AZ_NEO4J_PASSWORD || process.env.REACT_APP_NEO4J_PASSWORD || '',
-    database: process.env.REACT_APP_AZ_NEO4J_DATABASE || process.env.REACT_APP_NEO4J_DATABASE || 'neo4j',
-    authority: process.env.REACT_APP_AZ_NEO4J_AUTHORITY || null
-  };
-
-  const driver = neo4j.driver(
-    config.uri,
-    neo4j.auth.basic(config.username, config.password)
-  );
-
-  const session = driver.session({ database: config.database });
+  const driver = await initDriver();
+  const session = driver.session({ database: NEO4J_DATABASE });
 
   try {
     const result = await session.run(cypherQuery);
@@ -1336,7 +1329,6 @@ const executeCustomQuery = async (cypherQuery) => {
     });
 
     await session.close();
-    await driver.close();
 
     return {
       nodes: Array.from(nodesMap.values()),
@@ -1345,7 +1337,6 @@ const executeCustomQuery = async (cypherQuery) => {
 
   } catch (error) {
     await session.close();
-    await driver.close();
     throw error;
   }
 };

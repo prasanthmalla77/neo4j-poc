@@ -5,7 +5,10 @@ import neo4j from 'neo4j-driver';
 import { initDriver } from './neo4jService';
 import { ALGORITHM_TYPES } from '../data/algorithmConfigs';
 
-const NEO4J_DATABASE = process.env.REACT_APP_AZ_NEO4J_DATABASE || process.env.REACT_APP_NEO4J_DATABASE || 'neo4j';
+const USE_AZ_CLOUD = process.env.REACT_APP_AZ_CLOUD === 'true';
+const NEO4J_DATABASE = USE_AZ_CLOUD
+  ? (process.env.REACT_APP_AZ_NEO4J_DATABASE || 'neo4j')
+  : (process.env.REACT_APP_NEO4J_DATABASE || 'neo4j');
 const NEO4J_AUTHORITY = process.env.REACT_APP_AZ_NEO4J_AUTHORITY || null;
 
 // Projection registry - stores node/rel data for result enrichment after GDS calls
@@ -75,7 +78,7 @@ export const createGdsProjection = async (jobId, nodes, relationships) => {
   };
   const relProjection = buildRelProjection(relTypes, relationships);
 
-  const driver = initDriver();
+  const driver = await initDriver();
   const session = driver.session({ database: NEO4J_DATABASE });
   try {
     // Drop stale projection if present (failIfMissing = false)
@@ -376,7 +379,7 @@ export const runShortestPath = async (projectionName, config) => {
   const directedRelProjection = buildDirectedRelProjection(relTypes, relationships);
   const nodeLabels = [...new Set(nodes.flatMap(n => n.labels || []))].filter(Boolean);
 
-  const driver = initDriver();
+  const driver = await initDriver();
   const setupSession = driver.session({ database: NEO4J_DATABASE });
   try {
     await setupSession.run('CALL gds.graph.drop($name, false) YIELD graphName', { name: directedProjName });
@@ -598,7 +601,7 @@ export const runBetweenness = async (projectionName, config) => {
   let scoreMap;
   let usedGds = false;
 
-  const driver = initDriver();
+  const driver = await initDriver();
   const session = driver.session({ database: NEO4J_DATABASE });
   try {
     const samplingSize = Math.max(10, Math.round(nodes.length * Number(samplingRatio)));
@@ -687,7 +690,7 @@ export const dropGdsProjection = async (projectionName) => {
     throw new Error(`Projection ${projectionName} not found`);
   }
 
-  const driver = initDriver();
+  const driver = await initDriver();
   const session = driver.session({ database: NEO4J_DATABASE });
   try {
     await session.run('CALL gds.graph.drop($name, false) YIELD graphName', { name: projectionName });
